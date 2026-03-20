@@ -1,4 +1,5 @@
 // Shared provider data fetchers — used by both the live API route and the background scan job
+import Anthropic from "@anthropic-ai/sdk";
 
 // Wrap fetch with a timeout so slow providers never stall the whole scan
 function fetchTimeout(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
