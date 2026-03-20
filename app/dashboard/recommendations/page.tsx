@@ -61,6 +61,23 @@ export default function RecommendationsPage() {
       <Topbar title="Recommendations" />
       <main className="flex-1 overflow-y-auto p-7 flex flex-col gap-6">
 
+        {/* Stale scan warning */}
+        {result && (() => {
+          const ageMs = Date.now() - new Date(result.scanned_at).getTime();
+          const ageHours = ageMs / 3600000;
+          if (ageHours < 24) return null;
+          const ageDays = Math.floor(ageMs / 86400000);
+          return (
+            <div className="flex items-center gap-3 px-4 py-3 bg-amber/5 border border-amber/20 rounded-xl text-[12px] text-amber">
+              <span>⚠</span>
+              <span>
+                This scan is <strong>{ageDays} day{ageDays !== 1 ? "s" : ""} old</strong> — deadlines and expiry alerts may be outdated.
+                Run a fresh scan from the Overview page.
+              </span>
+            </div>
+          );
+        })()}
+
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
@@ -144,11 +161,17 @@ export default function RecommendationsPage() {
                   <p className="text-[12px] text-muted leading-relaxed">{rec.description}</p>
                   <div className="flex items-center gap-3 mt-3">
                     <span className="text-[11px] font-semibold text-text">→ {rec.action}</span>
-                    {rec.deadline && (
-                      <span className="text-[10px] text-muted font-mono">
-                        by {new Date(rec.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      </span>
-                    )}
+                    {rec.deadline && (() => {
+                      const deadlineMs = new Date(rec.deadline).getTime();
+                      const isPast = deadlineMs < Date.now();
+                      return isPast ? (
+                        <span className="text-[10px] font-bold text-red font-mono">OVERDUE</span>
+                      ) : (
+                        <span className="text-[10px] text-muted font-mono">
+                          by {new Date(rec.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
