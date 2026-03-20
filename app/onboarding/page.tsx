@@ -313,7 +313,7 @@ export default function OnboardingPage() {
             <div className="mt-5 flex justify-end">
               <button
                 onClick={handleStart}
-                disabled={selected.size === 0}
+                disabled={selected.size === 0 || saving}
                 className="flex items-center gap-2 px-6 py-3 bg-cyan text-bg text-[13px] font-bold rounded-xl hover:bg-cyan/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_0_24px_rgba(0,212,255,0.25)]"
               >
                 Start monitoring {selected.size > 0 ? `${selected.size} repo${selected.size !== 1 ? "s" : ""}` : "repos"}

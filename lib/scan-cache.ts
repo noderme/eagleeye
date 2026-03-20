@@ -1,4 +1,4 @@
-const CACHE_KEY = "eagle_eye_scan_v2";
+const CACHE_KEY = "eagle_eye_scan_v3";
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export function getCachedScan(): any | null {

@@ -39,11 +39,11 @@ export function Topbar({ title, alerts = 0, lastScan = "4 min ago", onConnect }:
 
       <Link
         href="/onboarding"
-        title="Switch project — each project has its own dashboard"
+        title="Switch project — selecting new repos creates a new dashboard"
         className="flex items-center gap-1.5 px-3 py-1.5 text-muted text-[12px] font-medium rounded-lg border border-border hover:border-cyan/40 hover:text-cyan transition-colors"
       >
         <ArrowLeftRight className="w-3.5 h-3.5" />
-        Switch
+        Switch Project
       </Link>
 
       {onConnect && (
