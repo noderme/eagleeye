@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { MOCK_MODE_ENABLED } from "@/lib/config";
+import { getMockScanResult } from "@/lib/mock-scan";
 
 export async function GET() {
+  // In mock mode, return complete mock scan data without requiring authentication
+  if (MOCK_MODE_ENABLED) {
+    console.log("[Eagle Eye] Mock mode: returning mock scan results");
+    return NextResponse.json({ result: getMockScanResult() });
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

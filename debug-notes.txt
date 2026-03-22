@@ -1,0 +1,5 @@
+DEBUG NOTES:
+- Navigating to /dashboard redirects to the landing page (/)
+- This is likely due to auth middleware that checks for a Supabase session
+- Need to add mock bypass to the middleware as well
+- The middleware is probably in middleware.ts at the project root

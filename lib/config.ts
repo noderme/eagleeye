@@ -1,7 +1,15 @@
 // Configuration module for Eagle Eye
 // Determines whether to use mock data or real API calls
 
-export const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true" || process.env.NODE_ENV === "development";
+// Mock mode is enabled when:
+// 1. NEXT_PUBLIC_USE_MOCK_DATA is explicitly set to "true", OR
+// 2. Running in development mode AND no real Supabase URL is configured
+export const USE_MOCK_DATA =
+  process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true" ||
+  (process.env.NODE_ENV === "development" &&
+    (!process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL === "http://localhost:8000" ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")));
 
 export const MOCK_MODE_ENABLED = USE_MOCK_DATA;
 

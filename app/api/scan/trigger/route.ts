@@ -5,12 +5,23 @@ import { decrypt } from "@/lib/crypto";
 import { runAllProviders, type Credentials } from "@/lib/providers";
 import { fetchAllRepoInsights, type RepoSummary } from "@/lib/github";
 import { runAnalysis } from "@/lib/analyze";
+import { MOCK_MODE_ENABLED } from "@/lib/config";
+import { getMockScanResult } from "@/lib/mock-scan";
 
 export const maxDuration = 300; // 5 min — needed for Claude + GitHub in production
 
 const HISTORY_SCANS = 7;
 
 export async function POST() {
+  // In mock mode, return complete mock scan data without requiring authentication
+  if (MOCK_MODE_ENABLED) {
+    console.log("[Eagle Eye] Mock mode: returning mock scan trigger results");
+    // Simulate a brief delay to make the scanning animation visible
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const mockResult = getMockScanResult();
+    return NextResponse.json({ result: mockResult });
+  }
+
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

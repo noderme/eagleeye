@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { MOCK_MODE_ENABLED } from "@/lib/config";
 
 export async function POST(req: NextRequest) {
+  const { result } = await req.json();
+  if (!result) return NextResponse.json({ error: "result required" }, { status: 400 });
+
+  // In mock mode, skip database save and return the result as-is
+  if (MOCK_MODE_ENABLED) {
+    console.log("[Eagle Eye] Mock mode: skipping database save");
+    return NextResponse.json({ result: { ...result, id: "mock-saved-001" } });
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { result } = await req.json();
-  if (!result) return NextResponse.json({ error: "result required" }, { status: 400 });
 
   const service = createServiceClient();
   const { data: saved, error } = await service

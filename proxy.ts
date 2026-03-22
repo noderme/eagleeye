@@ -1,8 +1,21 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
+// Check mock mode directly from env (can't import from lib/config in middleware context)
+const MOCK_MODE =
+  process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true" ||
+  (process.env.NODE_ENV === "development" &&
+    (!process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL === "http://localhost:8000" ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")));
+
 export async function proxy(req: NextRequest) {
   const res = NextResponse.next();
+
+  // In mock mode, skip all auth checks and allow access to all routes
+  if (MOCK_MODE) {
+    return res;
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

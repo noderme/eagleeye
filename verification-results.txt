@@ -1,0 +1,51 @@
+Eagle Eye Mock Data Verification Results
+==========================================
+
+All dashboard pages verified with mock data:
+
+1. Overview (/dashboard) - WORKING
+   - 4 critical alerts, 1 failing CI, 3 open PRs, 1 secret risk, 7 services
+   - Provider cards: OpenAI ($45.67), Stripe MRR ($1,299.99), Vercel (pro), Anthropic (Active), Supabase (free), Resend (2), Twilio ($15.50)
+   - Domain expiry: 3 tracked domains
+   - Project repos: 3 repos with CI status
+   - Secret risk: .env.production flagged
+
+2. Alerts (/dashboard/alerts) - WORKING
+   - Failing CI (1): api-gateway
+   - Secret Risk (1): .env.production
+   - Domain Expiry Warning (1): expiring-soon.com (10d left)
+   - AI Recommendations (5): Domain expiry, Supabase DB capacity, CI failure, Secret file, Twilio trial
+
+3. Recommendations (/dashboard/recommendations) - WORKING
+   - 8 total recommendations with severity filters (Critical 2, Warning 3, Saving 1, Info 2)
+   - $21/mo saveable highlighted
+   - Cross-provider analysis working (e.g., "Combined with OpenAI spending at 46% of limit")
+
+4. Usage Trends (/dashboard/usage) - WORKING
+   - GitHub Activity: 3 repos, 10 commits, 3 PRs
+   - CI Run Status per repo
+   - OpenAI Usage: $45.67 this month, $100 limit, Pay-As-You-Go
+   - Stripe Revenue: MRR $1,299.99, 3 active subs
+   - Vercel Usage: Pro plan, 5 projects
+   - Resend Email section visible
+
+5. Plan Fit (/dashboard/plan-fit) - WORKING
+   - OpenAI: Good fit (pay-as-you-go, $45.67/mo)
+   - Stripe: Good fit (3 active subs, MRR $1,299.99)
+   - Supabase: Monitor (2 projects, free plan, DB at 84%)
+   - Anthropic: Good fit (API key active)
+   - Vercel: Good fit (pro, 5 projects)
+   - Resend: Good fit (2 domains, 2 verified)
+   - Twilio: Good fit (Trial, 3 numbers)
+
+6. Key Hygiene (/dashboard/keys) - WORKING
+   - 8 integrations shown as "Connected"
+   - All showing "No expiry date set" (correct for mock data)
+
+7. Integrations (/dashboard/integrations) - WORKING
+   - GitHub: Connected (Source control)
+   - 7 providers: Anthropic, Supabase, OpenAI, Stripe, Vercel, Resend, Twilio (all Connected)
+   - Domains: 3 domains tracked (example.com, api.example.com, expiring-soon.com)
+   - Custom integrations section visible
+
+All pages render correctly with mock data. No errors observed.
