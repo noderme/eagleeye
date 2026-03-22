@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { USE_MOCK_DATA } from "@/lib/config";
 import { Github, Eye, Zap, KeyRound, TrendingUp, ShieldCheck, Globe, GitBranch, ArrowRight, Check } from "lucide-react";
 
 const TICKER = [
@@ -139,6 +140,13 @@ export default function LandingPage() {
   async function connectGitHub() {
     setLoading(true);
     setAuthError(null);
+
+    // In mock mode, skip OAuth entirely and go straight to dashboard
+    if (USE_MOCK_DATA) {
+      router.push("/dashboard");
+      return;
+    }
+
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
