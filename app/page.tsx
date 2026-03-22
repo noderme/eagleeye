@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { USE_MOCK_DATA } from "@/lib/config";
+// Mock mode check — read directly from process.env at compile time
+// NEXT_PUBLIC_ vars are inlined by Next.js at build/dev time
+const IS_MOCK_MODE = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
 import { Github, Eye, Zap, KeyRound, TrendingUp, ShieldCheck, Globe, GitBranch, ArrowRight, Check } from "lucide-react";
 
 const TICKER = [
@@ -118,6 +120,19 @@ export default function LandingPage() {
   const [charIndex, setCharIndex] = useState(0);
   const [email, setEmail] = useState("");
   const [emailSubmitted, setEmailSubmitted] = useState(false);
+  const [isMock, setIsMock] = useState(IS_MOCK_MODE);
+
+  // Double-check mock mode at runtime by hitting the API
+  useEffect(() => {
+    fetch("/api/scan/results")
+      .then(res => {
+        if (res.ok) {
+          // If scan/results returns 200 without auth, mock mode is active
+          setIsMock(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const current = TICKER[tickerIndex];
@@ -142,7 +157,7 @@ export default function LandingPage() {
     setAuthError(null);
 
     // In mock mode, skip OAuth entirely and go straight to dashboard
-    if (USE_MOCK_DATA) {
+    if (isMock || IS_MOCK_MODE) {
       router.push("/dashboard");
       return;
     }
