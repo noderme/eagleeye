@@ -1,13 +1,20 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
-const client = new Anthropic();
+// Lazy-initialize to avoid crash when ANTHROPIC_API_KEY is not set
+let _client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!_client) {
+    _client = new Anthropic();
+  }
+  return _client;
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { integrations } = await req.json();
 
-    const stream = client.messages.stream({
+    const stream = getClient().messages.stream({
       model: "claude-opus-4-6",
       max_tokens: 8096,
       thinking: { type: "adaptive" },

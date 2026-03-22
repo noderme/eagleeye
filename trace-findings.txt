@@ -1,0 +1,53 @@
+REAL MODE TRACE — FINDINGS
+
+=== CRITICAL ISSUE #1: app/api/analyze/route.ts ===
+Line 3: `const client = new Anthropic();`
+This creates an Anthropic client at MODULE LOAD TIME.
+If ANTHROPIC_API_KEY is not set, this will throw immediately when the module is imported.
+Even if the key IS set, this route creates its own client separate from analyze.ts.
+This route is NOT used by the main scan pipeline (scan/trigger uses lib/analyze.ts directly).
+But if anything imports or hits /api/analyze, it will crash without the key.
+STATUS: MEDIUM RISK — only affects direct /api/analyze calls, not the main scan flow.
+FIX: Lazy-initialize the client.
+
+=== ISSUE #2: app/api/integrations/fetch/route.ts ===
+This route does NOT have a MOCK_MODE check at the top.
+It imports MOCK_MODE_ENABLED but the mock check happens inside runAllProviders.
+In real mode, it expects credentials in the POST body.
+The route itself doesn't require auth — anyone can POST to it.
+STATUS: LOW RISK — works in real mode, but no auth protection.
+
+=== ISSUE #3: app/api/scan/results/route.ts ===
+In real mode: reads from Supabase scan_results table.
+Requires authenticated user.
+Looks correct.
+
+=== ISSUE #4: app/api/scan/trigger/route.ts ===
+In real mode: full pipeline runs.
+Requires authenticated user.
+Calls runAnalysis (now correctly aliased to runEnhancedAnalysis).
+Looks correct.
+
+=== ISSUE #5: app/api/scan/save/route.ts ===
+In real mode: saves scan result to Supabase.
+Requires authenticated user.
+Looks correct.
+
+=== ISSUE #6: app/api/keys/status/route.ts ===
+In real mode: reads user_api_keys from Supabase.
+Requires authenticated user.
+Looks correct.
+
+=== ISSUE #7: app/api/integrations/detected/route.ts ===
+In real mode: reads user_repos from Supabase, scans package.json via GitHub API.
+Requires authenticated user.
+Looks correct.
+
+=== REMAINING ROUTES TO CHECK ===
+- app/api/auth/callback/route.ts — OAuth callback
+- app/api/github/repos/route.ts — Fetch user repos
+- app/api/github/store-token/route.ts — Store GitHub token
+- app/api/keys/store/route.ts — Store API keys
+- app/api/keys/revoke/route.ts — Revoke API keys
+- app/api/repos/route.ts — Save selected repos
+- app/api/jobs/scan/route.ts — Background scan job (QStash)
