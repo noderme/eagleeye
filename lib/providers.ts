@@ -1,5 +1,7 @@
 // Shared provider data fetchers — used by both the live API route and the background scan job
 import Anthropic from "@anthropic-ai/sdk";
+import { MOCK_MODE_ENABLED } from "./config";
+import { getMockProvider, mockAnthropic } from "./mock-providers";
 
 // Wrap fetch with a timeout so slow providers never stall the whole scan
 function fetchTimeout(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
@@ -225,168 +227,115 @@ export async function fetchSupabase(accessToken: string) {
   const headers = { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" };
   const projectsRes = await fetchTimeout("https://api.supabase.com/v1/projects", { headers });
   if (!projectsRes.ok) {
+    return { provider: "supabase", error: `HTTP ${projectsRes.status}` };
+  }
+  const projects = await projectsRes.json();
+  if (!projects || projects.length === 0) {
+    return { provider: "supabase", projects: [], _summary: "No projects found", _signal: "Create a project to get started.", _status: "good" };
+  }
+
+  const project = projects[0];
+  const usageRes = await fetchTimeout(`https://api.supabase.com/v1/projects/${project.ref}/usage`, { headers });
+  const usage = usageRes.ok ? await usageRes.json() : null;
+
+  const freeTier = project.plan.id === "free";
+  const usageMetrics = (usage?.usage ?? []).map((u: any) => {
+    const limit = freeTier ? SUPABASE_FREE_LIMITS[u.metric] : null;
+    const pct = limit ? u.usage / limit.limit : null;
     return {
-      provider: "supabase",
-      projectCount: 0,
-      projects: [],
-      plan: "free",
-      usage: null,
-      error: `HTTP ${projectsRes.status}`,
-      _summary: "Auth failed",
-      _signal: "Access token is invalid or lacks project read permissions.",
-      _status: "upgrade",
+      metric: u.metric,
+      name: limit?.label ?? u.metric,
+      usage: u.usage,
+      limit: limit?.limit ?? null,
+      unit: limit?.unit ?? "",
+      usageFormatted: limit?.unit === "MB" || limit?.unit === "GB" ? formatBytes(u.usage) : u.usage.toLocaleString(),
+      limitFormatted: limit ? (limit.unit === "MB" || limit.unit === "GB" ? formatBytes(limit.limit) : limit.limit.toLocaleString()) : null,
+      pct: pct,
     };
-  }
+  });
 
-  const raw = await projectsRes.json();
-  const list: any[] = Array.isArray(raw) ? raw : [];
-  const mapped = list.map((p: any) => ({
-    name: p.name,
-    ref: p.id,
-    plan: p.subscription_tier ?? p.plan ?? "free",
-    region: p.region,
-    status: p.status,
-  }));
-
-  // Fetch usage for each project in parallel
-  const usageResults = await Promise.allSettled(
-    mapped.map(async (p) => {
-      const res = await fetchTimeout(`https://api.supabase.com/v1/projects/${p.ref}/usage`, { headers });
-      if (!res.ok) return null;
-      return { ref: p.ref, name: p.name, plan: p.plan, data: await res.json() };
-    })
-  );
-
-  // Parse usage metrics; API returns { usages: [{metric, usage, limit, cost, ...}] }
-  const projectUsage: Record<string, any> = {};
-  const signals: string[] = [];
-  let worstStatus: "good" | "warn" | "upgrade" = "good";
-
-  for (const r of usageResults) {
-    if (r.status !== "fulfilled" || !r.value) continue;
-    const { ref, name, plan, data } = r.value;
-    const usages: any[] = data?.usages ?? [];
-    const metrics: Record<string, { usage: number; limit: number | null; pct: number | null; label: string; formatted: string }> = {};
-
-    for (const u of usages) {
-      const meta = SUPABASE_FREE_LIMITS[u.metric];
-      const usage = u.usage ?? 0;
-      const limitVal = u.limit ?? meta?.limit ?? null;
-      const pct = limitVal ? usage / limitVal : null;
-      const isByteMetric = ["db_size", "egress", "storage_size"].includes(u.metric);
-      metrics[u.metric] = {
-        usage,
-        limit: limitVal,
-        pct,
-        label: meta?.label ?? u.metric,
-        formatted: isByteMetric ? formatBytes(usage) : String(usage),
-      };
-
-      // Signal generation
-      if (pct !== null && plan === "free") {
-        if (pct >= 0.9) {
-          signals.push(`${name}: ${meta?.label ?? u.metric} at ${(pct * 100).toFixed(0)}% of free limit — upgrade now.`);
-          worstStatus = "upgrade";
-        } else if (pct >= 0.7) {
-          signals.push(`${name}: ${meta?.label ?? u.metric} at ${(pct * 100).toFixed(0)}% of free limit.`);
-          if (worstStatus === "good") worstStatus = "warn";
-        }
-      }
-    }
-    projectUsage[ref] = metrics;
-  }
-
-  const freeCount = mapped.filter((p) => p.plan === "free").length;
-  const firstPlan = mapped[0]?.plan ?? "free";
-
+  const highUsage = usageMetrics.find((u: any) => u.pct > 0.8);
   return {
     provider: "supabase",
-    projectCount: list.length,
-    projects: mapped.map((p) => ({ ...p, usage: projectUsage[p.ref] ?? null })),
-    plan: firstPlan,
-    usage: projectUsage,
+    projects,
+    usage: usageMetrics,
+    _summary: `${project.plan.name} · ${project.name}`,
+    _signal: highUsage ? `High usage on ${highUsage.name} (${(highUsage.pct*100).toFixed(0)}%) — consider upgrading.` : "Usage is within limits.",
+    _status: highUsage ? "upgrade" : "good",
     error: null,
-    _summary: `${list.length} project${list.length !== 1 ? "s" : ""} · ${firstPlan} plan`,
-    _signal: signals.length > 0
-      ? signals.join(" ")
-      : freeCount >= 2
-        ? `${freeCount} projects on free tier — free plan allows 2 active projects.`
-        : list.length === 0
-          ? "No projects found."
-          : `${mapped.map((p) => `${p.name} (${p.plan})`).join(", ")} — usage within limits.`,
-    _status: worstStatus !== "good" ? worstStatus : freeCount >= 2 ? "warn" : "good",
   };
 }
 
-export async function fetchAnthropic(apiKey: string) {
-  // Use the models endpoint — lightweight, no token spend
-  const res = await fetchTimeout("https://api.anthropic.com/v1/models", {
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-  });
+export async function fetchGitHub(accessToken: string) {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const [userRes, reposRes] = await Promise.all([
+    fetchTimeout("https://api.github.com/user", { headers }),
+    fetchTimeout("https://api.github.com/user/repos?per_page=20&sort=pushed", { headers }),
+  ]);
+
+  const user = userRes.ok ? await userRes.json() : null;
+  const repos = reposRes.ok ? await reposRes.json() : [];
 
   return {
-    provider: "anthropic",
-    keyValid: res.ok,
-    status: res.ok ? "active" : res.status === 401 ? "invalid" : "unknown",
-    error: res.status === 401 ? "Invalid API key" : !res.ok ? `HTTP ${res.status}` : null,
-    _summary: `API key ${res.ok ? "active" : "invalid"}`,
-    _signal: res.ok ? "Key is valid. No billing API — track expiry on Key Hygiene page." : "API key is invalid. Rotate it on the Integrations page.",
-    _status: res.ok ? "good" : "upgrade",
+    provider: "github",
+    user: user ? { login: user.login, name: user.name, avatarUrl: user.avatar_url } : null,
+    repos: repos.map((r: any) => ({ id: r.id, name: r.full_name, private: r.private, pushedAt: r.pushed_at, url: r.html_url })),
+    _summary: `${user?.login ?? "Not logged in"}`,
+    _signal: `${repos.length} repos found.`,
+    _status: "good",
+    error: !userRes.ok ? `HTTP ${userRes.status}` : null,
   };
 }
 
 export async function checkDomain(domain: string) {
   try {
-    const res = await fetchTimeout(`https://rdap.org/domain/${domain}`, {
-      headers: { Accept: "application/json" },
-    }, 10000);
-    if (!res.ok) return { domain, error: `HTTP ${res.status}`, expiresAt: null, daysLeft: null };
-
+    const res = await fetch(`https://api.whois.vu/?q=${domain}`);
     const data = await res.json();
-    const expiryEvent = (data.events ?? []).find((e: any) => e.eventAction === "expiration");
-    const registrationEvent = (data.events ?? []).find((e: any) => e.eventAction === "registration");
-    const expiresAt = expiryEvent?.eventDate ?? null;
-
+    const expires = data.expires ?? null;
     return {
       domain,
-      expiresAt,
-      daysLeft: expiresAt ? daysUntil(expiresAt) : null,
-      registeredAt: registrationEvent?.eventDate ?? null,
+      expires,
+      daysUntilExpiry: expires ? daysUntil(expires) : null,
+      registrar: data.registrar ?? null,
       status: data.status ?? [],
-      nameservers: (data.nameservers ?? []).map((n: any) => n.ldhName),
-      error: null,
     };
-  } catch {
-    return { domain, error: "RDAP lookup failed", expiresAt: null, daysLeft: null };
+  } catch (e) {
+    return { domain, error: String(e) };
   }
 }
 
-// Credentials is a plain map of provider → credential fields.
-// Known providers have typed fields; unknown providers are passed through as-is.
-export type Credentials = Record<string, Record<string, string>>;
-
-// Providers with hand-written fetchers — everything else goes to Claude.
-const KNOWN_FETCHERS: Record<string, (creds: Record<string, string>) => Promise<any>> = {
-  openai:    (c) => fetchOpenAI(c.key),
-  anthropic: (c) => fetchAnthropic(c.key),
-  supabase:  (c) => fetchSupabase(c.accessToken),
-  stripe:    (c) => fetchStripe(c.key),
-  vercel:    (c) => fetchVercel(c.key),
-  resend:    (c) => fetchResend(c.key),
-  twilio:    (c) => fetchTwilio(c.accountSid, c.authToken),
-};
-
-// ── Agentic fetcher for unknown providers ──────────────────────────────────
-// Claude is given an http_get tool and told to research the provider's API,
-// fetch whatever is useful (plan, usage, health, billing), and return JSON.
+export async function fetchAnthropic(apiKey: string): Promise<any> {
+  if (MOCK_MODE_ENABLED) {
+    return mockAnthropic();
+  }
+  const headers = { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
+  const modelsRes = await fetchTimeout("https://api.anthropic.com/v1/models", { headers });
+  if (!modelsRes.ok) {
+    return {
+      provider: "anthropic",
+      error: modelsRes.status === 401 ? "Invalid API key" : `HTTP ${modelsRes.status}`,
+      _summary: "Key invalid",
+      _signal: "API key is invalid or revoked. Rotate it on the Integrations page.",
+      _status: "upgrade",
+    };
+  }
+  return {
+    provider: "anthropic",
+    _summary: "Key active",
+    _signal: "Ready to analyze with Claude.",
+    _status: "good",
+  };
+}
 
 export async function fetchWithClaude(
   providerId: string,
   credentials: Record<string, string>
 ): Promise<any> {
+  if (MOCK_MODE_ENABLED) {
+    console.log(`[Eagle Eye] Using mock data for unknown provider ${providerId}`);
+    return { provider: providerId, _summary: "Mocked unknown provider", _signal: "Using mock data", _status: "info" };
+  }
+
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic();
 
@@ -396,21 +345,7 @@ export async function fetchWithClaude(
 
   const messages: Anthropic.MessageParam[] = [{
     role: "user",
-    content: `You are Eagle Eye, an infrastructure monitoring tool. The user has connected "${providerId}" as an integration.
-
-Their credentials:
-${credList}
-
-Your job:
-1. Figure out the "${providerId}" service and its REST API.
-2. Use http_get to call the appropriate endpoints (account info, plan/tier, usage, billing, health).
-3. Return a JSON object with:
-   - All raw data you fetched (plan, usage metrics, billing, health, etc.)
-   - "_summary": a short string describing the current plan/tier (e.g. "Pro · 3 projects")
-   - "_signal": one sentence describing the health/fit (e.g. "Usage is within limits." or "Approaching free tier limit.")
-   - "_status": one of "good", "warn", or "upgrade"
-
-Be concise. Only call endpoints that return useful monitoring data.`,
+    content: `You are Eagle Eye, an infrastructure monitoring tool. The user has connected "${providerId}" as an integration.\n\nTheir credentials:\n${credList}\n\nYour job:\n1. Figure out the "${providerId}" service and its REST API.\n2. Use http_get to call the appropriate endpoints (account info, plan/tier, usage, billing, health).\n3. Return a JSON object with:\n   - All raw data you fetched (plan, usage metrics, billing, health, etc.)\n   - "_summary": a short string describing the current plan/tier (e.g. "Pro · 3 projects")\n   - "_signal": one sentence describing the health/fit (e.g. "Usage is within limits." or "Approaching free tier limit.")\n   - "_status": one of "good", "warn", or "upgrade"\n\nBe concise. Only call endpoints that return useful monitoring data.`,
   }];
 
   const tools: Anthropic.Tool[] = [{
@@ -480,14 +415,34 @@ Be concise. Only call endpoints that return useful monitoring data.`,
   }
 }
 
-export async function runAllProviders(credentials: Credentials, domains: string[]) {
+export const KNOWN_FETCHERS: Record<string, (creds: any) => Promise<any>> = {
+  openai: (c: { apiKey: string }) => fetchOpenAI(c.apiKey),
+  stripe: (c: { apiKey: string }) => fetchStripe(c.apiKey),
+  vercel: (c: { apiToken: string }) => fetchVercel(c.apiToken),
+  resend: (c: { apiKey: string }) => fetchResend(c.apiKey),
+  twilio: (c: { accountSid: string; authToken: string }) => fetchTwilio(c.accountSid, c.authToken),
+  supabase: (c: { accessToken: string }) => fetchSupabase(c.accessToken),
+  github: (c: { accessToken: string }) => fetchGitHub(c.accessToken),
+  anthropic: (c: { apiKey: string }) => fetchAnthropic(c.apiKey),
+};
+
+export type Credentials = Record<string, Record<string, string>>;
+
+export async function runAllProviders(credentials: Credentials, domains: []) {
   const tasks: Promise<any>[] = [];
   const keys: string[] = [];
 
   for (const [provider, creds] of Object.entries(credentials)) {
     if (provider === "domains") continue;
     const fetcher = KNOWN_FETCHERS[provider];
-    if (fetcher) {
+    if (MOCK_MODE_ENABLED) {
+      const mockData = getMockProvider(provider);
+      if (mockData) {
+        tasks.push(Promise.resolve(mockData));
+      } else {
+        tasks.push(fetchWithClaude(provider, creds)); // Still use Claude for unknown providers even in mock mode, but it will return mock data
+      }
+    } else if (fetcher) {
       tasks.push(fetcher(creds));
     } else {
       // Unknown provider — let Claude figure it out
