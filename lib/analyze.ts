@@ -9,7 +9,14 @@ import { summarizeTwilio } from "./summarize/twilio";
 import { summarizeDomains, minDomainDaysLeft } from "./summarize/domains";
 import { summarizeKeyExpiry, minKeyExpiryDays } from "./summarize/keymeta";
 
-const client = new Anthropic({ timeout: 120_000 }); // 120s — extended thinking can be slow
+// Lazy-initialize the Anthropic client to avoid crashes when ANTHROPIC_API_KEY is not set
+let _client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!_client) {
+    _client = new Anthropic({ timeout: 120_000 });
+  }
+  return _client;
+}
 
 export interface Recommendation {
   id: string;
@@ -208,7 +215,7 @@ nextScanIn guidance:
 
 Sort: critical first, then warning, saving, info. Max 15 total.`;
 
-  const stream = client.messages.stream({
+  const stream = getClient().messages.stream({
     model: "claude-opus-4-6",
     max_tokens: 16000, // Increased for extended thinking
     thinking: {
@@ -269,3 +276,6 @@ Please analyze this infrastructure deeply:
 
   return parsed;
 }
+
+// Alias for backward compatibility — scan routes import runAnalysis
+export const runAnalysis = runEnhancedAnalysis;

@@ -306,7 +306,7 @@ export async function checkDomain(domain: string) {
 
 export async function fetchAnthropic(apiKey: string): Promise<any> {
   if (MOCK_MODE_ENABLED) {
-    return mockAnthropic();
+    return mockAnthropic;
   }
   const headers = { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
   const modelsRes = await fetchTimeout("https://api.anthropic.com/v1/models", { headers });
@@ -428,7 +428,7 @@ export const KNOWN_FETCHERS: Record<string, (creds: any) => Promise<any>> = {
 
 export type Credentials = Record<string, Record<string, string>>;
 
-export async function runAllProviders(credentials: Credentials, domains: []) {
+export async function runAllProviders(credentials: Credentials, domains: string[]) {
   const tasks: Promise<any>[] = [];
   const keys: string[] = [];
 
