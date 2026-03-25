@@ -5,13 +5,12 @@ import { Topbar } from "@/components/topbar";
 import clsx from "clsx";
 import { timeAgo } from "@/lib/github";
 import type { RepoInsight } from "@/lib/github";
-import type { Recommendation } from "@/lib/analyze";
 
 interface ScanResult {
   scanned_at: string;
   github_data: RepoInsight[];
   domain_data: any[];
-  analysis: { recommendations: Recommendation[] } | null;
+  analysis: { recommendations: any[] } | null;
 }
 
 export default function AlertsPage() {
@@ -27,14 +26,13 @@ export default function AlertsPage() {
 
   const insights: RepoInsight[] = result?.github_data ?? [];
   const domains: any[] = result?.domain_data ?? [];
-  const recommendations: Recommendation[] = result?.analysis?.recommendations ?? [];
 
+  // Real alerts only — no AI recommendations here (those live on the Recommendations page)
   const failingCI = insights.filter(i => i.ciRuns[0]?.conclusion === "failure");
   const riskyFiles = insights.flatMap(i => i.riskyFiles.map(f => ({ file: f, repo: i.repo.name })));
-  const criticalRecs = recommendations.filter(r => r.severity === "critical" || r.severity === "warning");
   const urgentDomains = domains.filter(d => d.daysLeft !== null && d.daysLeft <= 30);
 
-  const totalAlerts = failingCI.length + riskyFiles.length + criticalRecs.length + urgentDomains.length;
+  const totalAlerts = failingCI.length + riskyFiles.length + urgentDomains.length;
 
   return (
     <>
@@ -53,7 +51,13 @@ export default function AlertsPage() {
             <span className="text-3xl">✅</span>
             <div>
               <div className="text-[14px] font-semibold text-green">No active alerts</div>
-              <div className="text-[12px] text-muted mt-0.5">All systems healthy. Last scan {result ? timeAgo(result.scanned_at) : "—"}</div>
+              <div className="text-[12px] text-muted mt-0.5">
+                All systems healthy. Last scan {result ? timeAgo(result.scanned_at) : "—"}
+              </div>
+              <div className="text-[11px] text-muted mt-2">
+                AI recommendations and cost-saving suggestions are on the{" "}
+                <a href="/dashboard/recommendations" className="text-cyan underline underline-offset-2">Recommendations</a> page.
+              </div>
             </div>
           </div>
         )}
@@ -126,46 +130,6 @@ export default function AlertsPage() {
                   </div>
                 </div>
               ))}
-            </div>
-          </section>
-        )}
-
-        {/* Critical recommendations */}
-        {criticalRecs.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple shadow-[0_0_6px_#7B61FF]" />
-              AI Recommendations ({criticalRecs.length})
-            </h2>
-            <div className="flex flex-col gap-3">
-              {criticalRecs.map(rec => {
-                const cfg = {
-                  critical: { badge: "bg-red/10 text-red border-red/20",     dot: "bg-red pulse-red" },
-                  warning:  { badge: "bg-amber/10 text-amber border-amber/20", dot: "bg-amber" },
-                  info:     { badge: "bg-cyan/10 text-cyan border-cyan/20",   dot: "bg-cyan" },
-                  saving:   { badge: "bg-green/10 text-green border-green/20", dot: "bg-green" },
-                }[rec.severity];
-                return (
-                  <div key={rec.id} className="bg-surface border border-border rounded-2xl p-5 flex gap-4">
-                    <span className="text-2xl flex-shrink-0">{rec.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-[13px] font-semibold text-text">{rec.title}</span>
-                        <span className={clsx("text-[10px] font-bold uppercase tracking-[1px] px-2 py-0.5 rounded-full border", cfg.badge)}>
-                          {rec.severity}
-                        </span>
-                      </div>
-                      <p className="text-[12px] text-muted leading-relaxed">{rec.description}</p>
-                      <p className="text-[11px] font-semibold text-text mt-2">{rec.action}</p>
-                      {rec.deadline && (
-                        <p className="text-[10px] text-muted mt-1 font-mono">
-                          Deadline: {new Date(rec.deadline).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </section>
         )}

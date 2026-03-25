@@ -155,14 +155,20 @@ export default function RecommendationsPage() {
                   <div className="flex items-center gap-2 flex-wrap mb-2">
                     <span className="text-[13px] font-semibold text-text">{rec.title}</span>
                     <span className={clsx("text-[10px] font-bold uppercase tracking-[1px] px-2 py-0.5 rounded-full border", cfg.badge)}>
-                      {rec.saving ?? cfg.label}
+                      {cfg.label}
                     </span>
+                    {rec.saving && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-green/10 border-green/20 text-green">
+                        💰 {rec.saving}
+                      </span>
+                    )}
                   </div>
                   <p className="text-[12px] text-muted leading-relaxed">{rec.description}</p>
                   <div className="flex items-center gap-3 mt-3">
                     <span className="text-[11px] font-semibold text-text">→ {rec.action}</span>
                     {rec.deadline && (() => {
                       const deadlineMs = new Date(rec.deadline).getTime();
+                      if (isNaN(deadlineMs)) return null;
                       const isPast = deadlineMs < Date.now();
                       return isPast ? (
                         <span className="text-[10px] font-bold text-red font-mono">OVERDUE</span>
