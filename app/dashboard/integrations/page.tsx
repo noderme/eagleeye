@@ -917,7 +917,7 @@ function LLMKeySection({ connected, setConnected }: { connected: Set<string>; se
             <div className="px-3 pb-3 flex flex-col gap-2 bg-dim border-t border-border">
               {p.hint && <p className="text-[11px] text-muted mt-2">{p.hint}</p>}
               <input
-                type="password"
+                type={p.id === "llm_ollama" ? "text" : "password"}
                 placeholder={p.placeholder}
                 value={inputs[p.id] ?? ""}
                 onChange={e => setInputs({ ...inputs, [p.id]: e.target.value })}
@@ -929,14 +929,14 @@ function LLMKeySection({ connected, setConnected }: { connected: Set<string>; se
                 disabled={!inputs[p.id]?.trim() || saving === p.id}
                 className="px-4 py-1.5 bg-cyan text-black text-[12px] font-semibold rounded-lg disabled:opacity-40 hover:bg-cyan/90 transition-colors"
               >
-                {saving === p.id ? "Saving..." : "Save key"}
+                {saving === p.id ? "Saving..." : p.id === "llm_ollama" ? "Save URL" : "Save key"}
               </button>
             </div>
           )}
         </div>
       ))}
       {savedMsg && (
-        <p className="text-[11px] text-green flex items-center gap-1"><Check className="w-3 h-3" /> Key saved successfully</p>
+        <p className="text-[11px] text-green flex items-center gap-1"><Check className="w-3 h-3" /> {savedMsg === "llm_ollama" ? "URL saved successfully" : "Key saved successfully"}</p>
       )}
       {warning && (
         <p className="text-[11px] text-amber leading-relaxed mt-1">⚠️ {warning}</p>
