@@ -130,8 +130,11 @@ export default function DashboardPage() {
   const failingCI = insights.filter(i => i.ciRuns[0]?.conclusion === "failure").length;
   const totalOpenPRs = insights.reduce((s, i) => s + i.openPRs, 0);
   const riskyRepos = insights.filter(i => i.riskyFiles.length > 0).length;
-  const criticalAlerts = failingCI + riskyRepos
-    + recommendations.filter(r => r.severity === "critical").length;
+  // criticalAlerts must match EXACTLY what the Alerts page shows:
+  // failingCI + repos with risky files + domains expiring within 30 days
+  // Recommendations are NOT counted here — they live on the Recommendations page
+  const urgentDomains = domains.filter((d: any) => d.daysLeft !== null && d.daysLeft <= 30);
+  const criticalAlerts = failingCI + riskyRepos + urgentDomains.length;
   const servicesMonitored = Object.keys(providers).length;
 
   const isActive = loading || scanning;
@@ -306,6 +309,28 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* ── SCAN ERROR BANNER (e.g. invalid LLM key, Gemini 400, etc.) ── */}
+        {!loading && !scanning && result?.error && result.error !== "NO_LLM_KEY" && (
+          <div className="bg-red/5 border border-red/20 rounded-2xl px-5 py-4 flex items-start gap-3">
+            <span className="text-xl mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <div className="text-[13px] font-semibold text-red mb-1">AI analysis failed</div>
+              <div className="text-[12px] text-muted">
+                {result.error.includes("API key not valid") || result.error.includes("API_KEY_INVALID")
+                  ? "Your LLM API key is invalid. Please update it in Integrations → AI Analysis Engine."
+                  : result.error.includes("GoogleGenerativeAI Error")
+                    ? "Gemini API error — check your API key is valid and has quota remaining."
+                    : result.error.length > 200
+                      ? result.error.slice(0, 200) + "..."
+                      : result.error
+                }{" "}
+                <a href="/dashboard/integrations" className="text-cyan underline underline-offset-2 hover:text-cyan/80">
+                  Update in Integrations →
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
         {/* ── CREDENTIAL ERROR BANNERS (loud, per-provider) ── */}
         {credentialErrors.length > 0 && (
           <div className="flex flex-col gap-2">

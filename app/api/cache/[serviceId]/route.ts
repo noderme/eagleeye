@@ -13,13 +13,13 @@ import { deleteEndpointMap } from "@/lib/endpoint-store";
  */
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { serviceId: string } }
+  { params }: { params: Promise<{ serviceId: string }> }
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { serviceId } = params;
+  const { serviceId } = await params;
   if (!serviceId || typeof serviceId !== "string") {
     return NextResponse.json({ error: "Missing serviceId" }, { status: 400 });
   }
