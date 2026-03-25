@@ -104,6 +104,14 @@ export interface DiscoveredEndpoint {
    */
   extractFrom?: Array<{ path: string; storeAs: string }>;
 
+  /**
+   * Dot-notation path to the expiry timestamp in this endpoint's response.
+   * Set by the LLM when it finds a token/key metadata endpoint with expiry data.
+   * e.g. "token.expires_at", "data.expiry", "expires_at"
+   * null = LLM confirmed this endpoint has no expiry field (do not ask user)
+   * undefined = unknown (may ask user as fallback)
+   */
+  expiryField?: string | null;
   // ── Runtime state (set by verifyAndFetch, not by LLM) ────────────────────────────────────────────
   /** @deprecated kept for backward compat with v1/v2 cached maps that used a single authHeader string */
   authHeader?: string;
@@ -123,6 +131,19 @@ export interface EndpointMap {
   docsUrl?: string;
   /** Whether docs were found via live web search (true) or LLM memory fallback (false) */
   docsFromSearch?: boolean;
+  /**
+   * Auto-detected key expiry timestamp (ISO string) from the service's token metadata endpoint.
+   * Set by verifyAndFetch when it finds and extracts an expiry field from a response.
+   * null = service was checked and has no expiry concept (do not show manual prompt)
+   * undefined = not yet checked
+   */
+  keyExpiresAt?: string | null;
+  /**
+   * Whether the discovery engine found and checked for expiry in the docs.
+   * true = LLM explicitly found or confirmed absence of expiry fields
+   * false/undefined = not yet determined
+   */
+  expiryChecked?: boolean;
 }
 
 export interface LiveProviderData {
@@ -408,7 +429,13 @@ RULES:
   * Computed values: use {month_start_unix} for start of current month as Unix timestamp, {today_iso} for today as ISO date
 - Use the LATEST API version shown in the docs
 - You also have an http_get tool — use it ONLY if you need to fetch a specific sub-page referenced in the docs
-
+EXPIRY DETECTION (critical):
+- Look for any endpoint that returns token/key/credential metadata — these often contain expiry information
+- Common patterns: GET /token, GET /v1/me, GET /user, GET /tokens/{id}, GET /api-keys/{id}, GET /credentials
+- If such an endpoint exists, set "expiryField" to the dot-notation path of the expiry timestamp in the response
+  (e.g. "token.expires_at", "data.expiry", "key.valid_until", "expires_at")
+- If the endpoint has NO expiry field in the docs, set "expiryField" to null — this tells Eagle Eye not to ask the user
+- If you cannot determine whether expiry exists, omit "expiryField" entirely
 CATEGORIES (for display grouping only — do NOT use to filter):
 - "usage": API calls, tokens, requests, bandwidth, storage consumed
 - "billing": spend, invoices, subscription, payment
@@ -654,6 +681,34 @@ export async function verifyAndFetch(
         }
         // Also run the generic heuristic extractor as a fallback
         extractAndStoreIds(data, resolvedIds, endpointMap.serviceId);
+
+        // Auto-extract key expiry if this endpoint has an expiryField spec
+        if (endpoint.expiryField && !endpointMap.keyExpiresAt) {
+          const rawExpiry = extractByPath(data, endpoint.expiryField);
+          if (rawExpiry) {
+            // Normalize: handle Unix timestamps (seconds or ms) and ISO strings
+            let expiryIso: string | null = null;
+            const asNum = Number(rawExpiry);
+            if (!isNaN(asNum) && asNum > 0) {
+              // Unix timestamp: if < 1e10 it's seconds, otherwise ms
+              const ms = asNum < 1e10 ? asNum * 1000 : asNum;
+              expiryIso = new Date(ms).toISOString();
+            } else if (rawExpiry.match(/^\d{4}-/)) {
+              expiryIso = new Date(rawExpiry).toISOString();
+            }
+            if (expiryIso) {
+              endpointMap.keyExpiresAt = expiryIso;
+              endpointMap.expiryChecked = true;
+              console.log(`[Discovery] Auto-detected key expiry for ${endpointMap.serviceId}: ${expiryIso}`);
+            }
+          }
+        }
+        // If expiryField is explicitly null, the LLM confirmed no expiry exists
+        if (endpoint.expiryField === null && endpointMap.expiryChecked === undefined) {
+          endpointMap.keyExpiresAt = null;
+          endpointMap.expiryChecked = true;
+          console.log(`[Discovery] ${endpointMap.serviceId}: LLM confirmed no key expiry concept`);
+        }
       }
 
       results.push({

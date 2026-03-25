@@ -7,7 +7,11 @@ import { Calendar, Check, AlertTriangle, ShieldAlert } from "lucide-react";
 
 interface Integration {
   provider: string;
-  extra_config?: { keyExpiresAt?: string };
+  extra_config?: {
+    keyExpiresAt?: string | null; // null = confirmed no expiry concept for this service
+    expiryChecked?: boolean;      // true = discovery engine explicitly checked
+    _autoDetectedExpiry?: boolean;
+  };
 }
 
 interface KeyStatus {
@@ -46,21 +50,31 @@ export default function KeysPage() {
     connected.unshift({ provider: "github" });
   }
 
-  const withExpiry = connected.filter(i => i.extra_config?.keyExpiresAt);
-  const withoutExpiry = connected.filter(i => !i.extra_config?.keyExpiresAt);
+  // Three states for expiry:
+  // 1. Has a real expiry date (keyExpiresAt is a non-null string)
+  // 2. Confirmed no expiry (keyExpiresAt === null, expiryChecked === true) — service doesn't have expiry concept
+  // 3. Unknown — not yet scanned or scan didn't check (show manual prompt)
+  const withExpiry = connected.filter(i => typeof i.extra_config?.keyExpiresAt === "string");
+  const confirmedNoExpiry = connected.filter(i =>
+    i.extra_config?.keyExpiresAt === null && i.extra_config?.expiryChecked === true
+  );
+  // Only show "no expiry set" warning for services where we don't know yet
+  const unknownExpiry = connected.filter(i =>
+    !withExpiry.includes(i) && !confirmedNoExpiry.includes(i)
+  );
 
-  const expired = withExpiry.filter(i => daysUntil(i.extra_config!.keyExpiresAt!) < 0);
+  const expired = withExpiry.filter(i => daysUntil(i.extra_config!.keyExpiresAt as string) < 0);
   const expiringSoon = withExpiry.filter(i => {
-    const d = daysUntil(i.extra_config!.keyExpiresAt!);
+    const d = daysUntil(i.extra_config!.keyExpiresAt as string);
     return d >= 0 && d <= 30;
   });
-  const healthy = withExpiry.filter(i => daysUntil(i.extra_config!.keyExpiresAt!) > 30);
+  const healthy = withExpiry.filter(i => daysUntil(i.extra_config!.keyExpiresAt as string) > 30);
 
   const issues = expired.length + expiringSoon.length;
 
   function expiryColor(days: number) {
-    if (days < 0)   return { text: "text-red",   badge: "bg-red/10 border-red/20 text-red",     label: "EXPIRED" };
-    if (days <= 7)  return { text: "text-red",   badge: "bg-red/10 border-red/20 text-red",     label: `${days}d left` };
+    if (days < 0)   return { text: "text-red",   badge: "bg-red/10 border-red/20 text-red",       label: "EXPIRED" };
+    if (days <= 7)  return { text: "text-red",   badge: "bg-red/10 border-red/20 text-red",       label: `${days}d left` };
     if (days <= 30) return { text: "text-amber", badge: "bg-amber/10 border-amber/20 text-amber", label: `${days}d left` };
     return { text: "text-green", badge: "bg-green/10 border-green/20 text-green", label: `${days}d left` };
   }
@@ -68,7 +82,8 @@ export default function KeysPage() {
   function KeyCard({ integration }: { integration: Integration }) {
     const meta = PROVIDER_META[integration.provider] ?? { name: integration.provider, emoji: "🔑" };
     const expiresAt = integration.extra_config?.keyExpiresAt;
-    const days = expiresAt ? daysUntil(expiresAt) : null;
+    const isConfirmedNoExpiry = expiresAt === null && integration.extra_config?.expiryChecked === true;
+    const days = typeof expiresAt === "string" ? daysUntil(expiresAt) : null;
     const cfg = days !== null ? expiryColor(days) : null;
 
     return (
@@ -78,12 +93,14 @@ export default function KeysPage() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[13px] font-semibold text-text">{meta.name}</div>
-          {expiresAt ? (
+          {typeof expiresAt === "string" ? (
             <div className="text-[11px] text-muted mt-0.5 font-mono">
               Expires {new Date(expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             </div>
+          ) : isConfirmedNoExpiry ? (
+            <div className="text-[11px] text-muted/40 mt-0.5">Keys do not expire for this service</div>
           ) : (
-            <div className="text-[11px] text-muted/50 mt-0.5">No expiry date set</div>
+            <div className="text-[11px] text-muted/50 mt-0.5">Expiry unknown — run a scan to detect</div>
           )}
         </div>
         <div className="flex-shrink-0">
@@ -121,7 +138,7 @@ export default function KeysPage() {
             {[
               { label: "Expired",       value: expired.length,      color: expired.length > 0 ? "text-red" : "text-green",   dot: expired.length > 0 ? "bg-red pulse-red" : "bg-green" },
               { label: "Expiring soon", value: expiringSoon.length,  color: expiringSoon.length > 0 ? "text-amber" : "text-green", dot: expiringSoon.length > 0 ? "bg-amber" : "bg-green" },
-              { label: "No expiry set", value: withoutExpiry.length, color: "text-muted",  dot: "bg-muted" },
+              { label: "Unknown expiry", value: unknownExpiry.length, color: unknownExpiry.length > 0 ? "text-amber" : "text-muted", dot: unknownExpiry.length > 0 ? "bg-amber" : "bg-muted" },
             ].map(({ label, value, color, dot }) => (
               <div key={label} className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
@@ -167,19 +184,33 @@ export default function KeysPage() {
           </section>
         )}
 
-        {/* No expiry set */}
-        {withoutExpiry.length > 0 && (
+        {/* Confirmed no expiry — informational only, no action needed */}
+        {confirmedNoExpiry.length > 0 && (
           <section className="flex flex-col gap-3">
             <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-muted" />
-              No expiry date set
+              No expiry concept
             </h2>
             <p className="text-[12px] text-muted -mt-1">
-              Add an expiry date on the{" "}
-              <a href="/dashboard/integrations" className="text-cyan hover:underline">Integrations</a>{" "}
-              page so Eagle Eye can alert you before keys expire.
+              These services confirmed their API keys do not expire.
             </p>
-            {withoutExpiry.map(i => <KeyCard key={i.provider} integration={i} />)}
+            {confirmedNoExpiry.map(i => <KeyCard key={i.provider} integration={i} />)}
+          </section>
+        )}
+
+        {/* Unknown expiry — run a scan or set manually */}
+        {unknownExpiry.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-muted" />
+              Expiry unknown
+            </h2>
+            <p className="text-[12px] text-muted -mt-1">
+              Run a scan to auto-detect expiry, or set it manually on the{" "}
+              <a href="/dashboard/integrations" className="text-cyan hover:underline">Integrations</a>{" "}
+              page.
+            </p>
+            {unknownExpiry.map(i => <KeyCard key={i.provider} integration={i} />)}
           </section>
         )}
 

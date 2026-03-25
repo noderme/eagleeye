@@ -107,7 +107,7 @@ async function runDynamicProviderWithCache(
   creds: Record<string, string>,
   llmKey: LLMKey,
   supabase: ReturnType<typeof createServiceClient>
-): Promise<LiveProviderData & { _providerSummary?: ProviderSummary }> {
+): Promise<LiveProviderData & { _providerSummary?: ProviderSummary; _keyExpiresAt?: string | null; _expiryChecked?: boolean }> {
   // Load cached endpoint map from DB
   const cachedMap = await loadEndpointMap(supabase, serviceId);
 
@@ -140,5 +140,11 @@ async function runDynamicProviderWithCache(
   }
 
   // Attach structured summary for dashboard rendering
-  return { ...liveData, _providerSummary: summary };
+  // Also surface expiry detection results so the scan save route can write them back to user_api_keys
+  return {
+    ...liveData,
+    _providerSummary: summary,
+    _keyExpiresAt: endpointMap.keyExpiresAt,      // ISO string if found, null if confirmed absent
+    _expiryChecked: endpointMap.expiryChecked ?? false, // true if LLM explicitly checked
+  };
 }

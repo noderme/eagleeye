@@ -70,3 +70,6 @@ The LLM discovers API endpoints automatically for any service. Users add a key �
 - [x] Update verifyAndFetch to resolve and send queryParams, body, and all headers uniformly — no per-service code
 - [x] Fix Vercel credential key name mismatch: stored as 'key' but KNOWN_FETCHERS passes c.apiToken
 - [x] Fix Ollama 404: pass baseURL through LLMKey object instead of mutating process.env (unreliable in Next.js API routes)
+- [x] Auto-detect key expiry from any service's token metadata endpoint via discovery engine (uniform, no special cases per provider)
+- [x] verifyAndFetch: scan all endpoint responses for expiry-like fields and store as keyExpiresAt automatically
+- [x] Dashboard: three expiry states — has expiry, confirmed no expiry (service doesn't have the concept), unknown (not yet scanned)
