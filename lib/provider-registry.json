@@ -1,0 +1,844 @@
+[
+  {
+    "id": "openai",
+    "name": "OpenAI",
+    "category": "ai",
+    "docsUrl": "https://platform.openai.com/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "sk-...", "secret": true }
+    ],
+    "signals": ["openai", "OPENAI_API_KEY", "openai-node", "@openai/"]
+  },
+  {
+    "id": "anthropic",
+    "name": "Anthropic",
+    "category": "ai",
+    "docsUrl": "https://docs.anthropic.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "sk-ant-...", "secret": true }
+    ],
+    "signals": ["anthropic", "ANTHROPIC_API_KEY", "@anthropic-ai/sdk"]
+  },
+  {
+    "id": "cohere",
+    "name": "Cohere",
+    "category": "ai",
+    "docsUrl": "https://docs.cohere.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["cohere", "COHERE_API_KEY", "cohere-ai"]
+  },
+  {
+    "id": "mistral",
+    "name": "Mistral AI",
+    "category": "ai",
+    "docsUrl": "https://docs.mistral.ai",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["mistral", "MISTRAL_API_KEY", "@mistralai/"]
+  },
+  {
+    "id": "replicate",
+    "name": "Replicate",
+    "category": "ai",
+    "docsUrl": "https://replicate.com/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Token", "placeholder": "r8_...", "secret": true }
+    ],
+    "signals": ["replicate", "REPLICATE_API_TOKEN", "replicate"]
+  },
+  {
+    "id": "huggingface",
+    "name": "Hugging Face",
+    "category": "ai",
+    "docsUrl": "https://huggingface.co/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Token", "placeholder": "hf_...", "secret": true }
+    ],
+    "signals": ["huggingface", "HUGGINGFACE_API_KEY", "HF_TOKEN", "@huggingface/"]
+  },
+  {
+    "id": "stripe",
+    "name": "Stripe",
+    "category": "payments",
+    "docsUrl": "https://stripe.com/docs/api",
+    "credentialFields": [
+      { "key": "secretKey", "label": "Secret Key", "placeholder": "sk_live_...", "secret": true }
+    ],
+    "signals": ["stripe", "STRIPE_SECRET_KEY", "STRIPE_API_KEY", "stripe"]
+  },
+  {
+    "id": "paddle",
+    "name": "Paddle",
+    "category": "payments",
+    "docsUrl": "https://developer.paddle.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true },
+      { "key": "vendorId", "label": "Vendor ID", "placeholder": "...", "secret": false }
+    ],
+    "signals": ["paddle", "PADDLE_API_KEY", "PADDLE_VENDOR_ID", "@paddle/"]
+  },
+  {
+    "id": "lemon-squeezy",
+    "name": "Lemon Squeezy",
+    "category": "payments",
+    "docsUrl": "https://docs.lemonsqueezy.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["lemonsqueezy", "LEMONSQUEEZY_API_KEY", "@lemonsqueezy/"]
+  },
+  {
+    "id": "supabase",
+    "name": "Supabase",
+    "category": "database",
+    "docsUrl": "https://supabase.com/docs",
+    "credentialFields": [
+      { "key": "projectUrl", "label": "Project URL", "placeholder": "https://xxx.supabase.co", "secret": false },
+      { "key": "serviceRoleKey", "label": "Service Role Key", "placeholder": "eyJ...", "secret": true }
+    ],
+    "signals": ["supabase", "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "@supabase/"]
+  },
+  {
+    "id": "planetscale",
+    "name": "PlanetScale",
+    "category": "database",
+    "docsUrl": "https://planetscale.com/docs",
+    "credentialFields": [
+      { "key": "databaseUrl", "label": "Database URL", "placeholder": "mysql://...", "secret": true }
+    ],
+    "signals": ["planetscale", "PLANETSCALE_DATABASE_URL", "DATABASE_URL", "@planetscale/"]
+  },
+  {
+    "id": "neon",
+    "name": "Neon",
+    "category": "database",
+    "docsUrl": "https://neon.tech/docs",
+    "credentialFields": [
+      { "key": "databaseUrl", "label": "Database URL", "placeholder": "postgresql://...", "secret": true }
+    ],
+    "signals": ["neon", "NEON_DATABASE_URL", "neon-serverless", "@neondatabase/"]
+  },
+  {
+    "id": "turso",
+    "name": "Turso",
+    "category": "database",
+    "docsUrl": "https://docs.turso.tech",
+    "credentialFields": [
+      { "key": "databaseUrl", "label": "Database URL", "placeholder": "libsql://...", "secret": false },
+      { "key": "authToken", "label": "Auth Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["turso", "TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN", "@libsql/"]
+  },
+  {
+    "id": "mongodb",
+    "name": "MongoDB Atlas",
+    "category": "database",
+    "docsUrl": "https://www.mongodb.com/docs/atlas",
+    "credentialFields": [
+      { "key": "uri", "label": "Connection URI", "placeholder": "mongodb+srv://...", "secret": true }
+    ],
+    "signals": ["mongodb", "MONGODB_URI", "MONGO_URI", "mongoose"]
+  },
+  {
+    "id": "redis",
+    "name": "Redis / Upstash",
+    "category": "database",
+    "docsUrl": "https://upstash.com/docs",
+    "credentialFields": [
+      { "key": "url", "label": "Redis URL", "placeholder": "rediss://...", "secret": true },
+      { "key": "token", "label": "REST Token (Upstash)", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["redis", "REDIS_URL", "UPSTASH_REDIS_REST_URL", "ioredis", "@upstash/redis"]
+  },
+  {
+    "id": "vercel",
+    "name": "Vercel",
+    "category": "hosting",
+    "docsUrl": "https://vercel.com/docs/rest-api",
+    "credentialFields": [
+      { "key": "token", "label": "API Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["vercel", "VERCEL_TOKEN", "VERCEL_API_TOKEN"]
+  },
+  {
+    "id": "netlify",
+    "name": "Netlify",
+    "category": "hosting",
+    "docsUrl": "https://docs.netlify.com/api/get-started",
+    "credentialFields": [
+      { "key": "token", "label": "Personal Access Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["netlify", "NETLIFY_AUTH_TOKEN", "NETLIFY_SITE_ID"]
+  },
+  {
+    "id": "railway",
+    "name": "Railway",
+    "category": "hosting",
+    "docsUrl": "https://docs.railway.app/reference/public-api",
+    "credentialFields": [
+      { "key": "token", "label": "API Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["railway", "RAILWAY_TOKEN", "RAILWAY_API_TOKEN"]
+  },
+  {
+    "id": "fly",
+    "name": "Fly.io",
+    "category": "hosting",
+    "docsUrl": "https://fly.io/docs/reference/machines-api",
+    "credentialFields": [
+      { "key": "token", "label": "API Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["fly", "FLY_API_TOKEN", "flyctl"]
+  },
+  {
+    "id": "render",
+    "name": "Render",
+    "category": "hosting",
+    "docsUrl": "https://render.com/docs/api",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "rnd_...", "secret": true }
+    ],
+    "signals": ["render", "RENDER_API_KEY"]
+  },
+  {
+    "id": "aws",
+    "name": "AWS",
+    "category": "cloud",
+    "docsUrl": "https://docs.aws.amazon.com",
+    "credentialFields": [
+      { "key": "accessKeyId", "label": "Access Key ID", "placeholder": "AKIA...", "secret": false },
+      { "key": "secretAccessKey", "label": "Secret Access Key", "placeholder": "...", "secret": true },
+      { "key": "region", "label": "Region", "placeholder": "us-east-1", "secret": false }
+    ],
+    "signals": ["aws", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "aws-sdk", "@aws-sdk/"]
+  },
+  {
+    "id": "gcp",
+    "name": "Google Cloud",
+    "category": "cloud",
+    "docsUrl": "https://cloud.google.com/docs",
+    "credentialFields": [
+      { "key": "projectId", "label": "Project ID", "placeholder": "my-project-123", "secret": false },
+      { "key": "serviceAccountKey", "label": "Service Account JSON Key", "placeholder": "{...}", "secret": true }
+    ],
+    "signals": ["gcp", "GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT", "GCP_PROJECT_ID", "@google-cloud/"]
+  },
+  {
+    "id": "azure",
+    "name": "Microsoft Azure",
+    "category": "cloud",
+    "docsUrl": "https://learn.microsoft.com/en-us/azure",
+    "credentialFields": [
+      { "key": "subscriptionId", "label": "Subscription ID", "placeholder": "...", "secret": false },
+      { "key": "tenantId", "label": "Tenant ID", "placeholder": "...", "secret": false },
+      { "key": "clientSecret", "label": "Client Secret", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["azure", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID", "@azure/"]
+  },
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "category": "cloud",
+    "docsUrl": "https://developers.cloudflare.com/api",
+    "credentialFields": [
+      { "key": "apiToken", "label": "API Token", "placeholder": "...", "secret": true },
+      { "key": "accountId", "label": "Account ID", "placeholder": "...", "secret": false }
+    ],
+    "signals": ["cloudflare", "CLOUDFLARE_API_TOKEN", "CF_API_TOKEN", "wrangler"]
+  },
+  {
+    "id": "resend",
+    "name": "Resend",
+    "category": "email",
+    "docsUrl": "https://resend.com/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "re_...", "secret": true }
+    ],
+    "signals": ["resend", "RESEND_API_KEY", "resend"]
+  },
+  {
+    "id": "sendgrid",
+    "name": "SendGrid",
+    "category": "email",
+    "docsUrl": "https://docs.sendgrid.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "SG...", "secret": true }
+    ],
+    "signals": ["sendgrid", "SENDGRID_API_KEY", "@sendgrid/"]
+  },
+  {
+    "id": "mailgun",
+    "name": "Mailgun",
+    "category": "email",
+    "docsUrl": "https://documentation.mailgun.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "key-...", "secret": true },
+      { "key": "domain", "label": "Domain", "placeholder": "mg.yourdomain.com", "secret": false }
+    ],
+    "signals": ["mailgun", "MAILGUN_API_KEY", "MAILGUN_DOMAIN", "mailgun.js"]
+  },
+  {
+    "id": "postmark",
+    "name": "Postmark",
+    "category": "email",
+    "docsUrl": "https://postmarkapp.com/developer",
+    "credentialFields": [
+      { "key": "serverToken", "label": "Server API Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["postmark", "POSTMARK_API_TOKEN", "postmark"]
+  },
+  {
+    "id": "loops",
+    "name": "Loops",
+    "category": "email",
+    "docsUrl": "https://loops.so/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["loops", "LOOPS_API_KEY", "loops-client"]
+  },
+  {
+    "id": "twilio",
+    "name": "Twilio",
+    "category": "messaging",
+    "docsUrl": "https://www.twilio.com/docs",
+    "credentialFields": [
+      { "key": "accountSid", "label": "Account SID", "placeholder": "AC...", "secret": false },
+      { "key": "authToken", "label": "Auth Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["twilio", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "twilio"]
+  },
+  {
+    "id": "vonage",
+    "name": "Vonage / Nexmo",
+    "category": "messaging",
+    "docsUrl": "https://developer.vonage.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": false },
+      { "key": "apiSecret", "label": "API Secret", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["vonage", "nexmo", "VONAGE_API_KEY", "NEXMO_API_KEY", "@vonage/"]
+  },
+  {
+    "id": "pusher",
+    "name": "Pusher",
+    "category": "realtime",
+    "docsUrl": "https://pusher.com/docs",
+    "credentialFields": [
+      { "key": "appId", "label": "App ID", "placeholder": "...", "secret": false },
+      { "key": "key", "label": "Key", "placeholder": "...", "secret": false },
+      { "key": "secret", "label": "Secret", "placeholder": "...", "secret": true },
+      { "key": "cluster", "label": "Cluster", "placeholder": "eu", "secret": false }
+    ],
+    "signals": ["pusher", "PUSHER_APP_ID", "PUSHER_KEY", "pusher-js"]
+  },
+  {
+    "id": "ably",
+    "name": "Ably",
+    "category": "realtime",
+    "docsUrl": "https://ably.com/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["ably", "ABLY_API_KEY", "ably"]
+  },
+  {
+    "id": "clerk",
+    "name": "Clerk",
+    "category": "auth",
+    "docsUrl": "https://clerk.com/docs",
+    "credentialFields": [
+      { "key": "secretKey", "label": "Secret Key", "placeholder": "sk_live_...", "secret": true },
+      { "key": "publishableKey", "label": "Publishable Key", "placeholder": "pk_live_...", "secret": false }
+    ],
+    "signals": ["clerk", "CLERK_SECRET_KEY", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "@clerk/"]
+  },
+  {
+    "id": "auth0",
+    "name": "Auth0",
+    "category": "auth",
+    "docsUrl": "https://auth0.com/docs",
+    "credentialFields": [
+      { "key": "domain", "label": "Domain", "placeholder": "your-tenant.auth0.com", "secret": false },
+      { "key": "clientSecret", "label": "Client Secret", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["auth0", "AUTH0_SECRET", "AUTH0_DOMAIN", "@auth0/"]
+  },
+  {
+    "id": "workos",
+    "name": "WorkOS",
+    "category": "auth",
+    "docsUrl": "https://workos.com/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "sk_...", "secret": true }
+    ],
+    "signals": ["workos", "WORKOS_API_KEY", "@workos-inc/"]
+  },
+  {
+    "id": "datadog",
+    "name": "Datadog",
+    "category": "monitoring",
+    "docsUrl": "https://docs.datadoghq.com/api",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true },
+      { "key": "appKey", "label": "Application Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["datadog", "DD_API_KEY", "DATADOG_API_KEY", "dd-trace"]
+  },
+  {
+    "id": "sentry",
+    "name": "Sentry",
+    "category": "monitoring",
+    "docsUrl": "https://docs.sentry.io/api",
+    "credentialFields": [
+      { "key": "dsn", "label": "DSN", "placeholder": "https://...@sentry.io/...", "secret": false },
+      { "key": "authToken", "label": "Auth Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["sentry", "SENTRY_DSN", "SENTRY_AUTH_TOKEN", "@sentry/"]
+  },
+  {
+    "id": "newrelic",
+    "name": "New Relic",
+    "category": "monitoring",
+    "docsUrl": "https://docs.newrelic.com/docs/apis",
+    "credentialFields": [
+      { "key": "licenseKey", "label": "License Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["newrelic", "NEW_RELIC_LICENSE_KEY", "newrelic"]
+  },
+  {
+    "id": "logflare",
+    "name": "Logflare",
+    "category": "monitoring",
+    "docsUrl": "https://logflare.app/guides",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true },
+      { "key": "sourceId", "label": "Source ID", "placeholder": "...", "secret": false }
+    ],
+    "signals": ["logflare", "LOGFLARE_API_KEY", "LOGFLARE_SOURCE_ID"]
+  },
+  {
+    "id": "axiom",
+    "name": "Axiom",
+    "category": "monitoring",
+    "docsUrl": "https://axiom.co/docs",
+    "credentialFields": [
+      { "key": "token", "label": "API Token", "placeholder": "xaat-...", "secret": true },
+      { "key": "dataset", "label": "Dataset", "placeholder": "...", "secret": false }
+    ],
+    "signals": ["axiom", "AXIOM_TOKEN", "AXIOM_DATASET", "@axiomhq/"]
+  },
+  {
+    "id": "posthog",
+    "name": "PostHog",
+    "category": "analytics",
+    "docsUrl": "https://posthog.com/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "Project API Key", "placeholder": "phc_...", "secret": true }
+    ],
+    "signals": ["posthog", "POSTHOG_KEY", "NEXT_PUBLIC_POSTHOG_KEY", "posthog-js"]
+  },
+  {
+    "id": "mixpanel",
+    "name": "Mixpanel",
+    "category": "analytics",
+    "docsUrl": "https://developer.mixpanel.com",
+    "credentialFields": [
+      { "key": "token", "label": "Project Token", "placeholder": "...", "secret": false },
+      { "key": "secret", "label": "Project Secret", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["mixpanel", "MIXPANEL_TOKEN", "MIXPANEL_PROJECT_TOKEN", "mixpanel"]
+  },
+  {
+    "id": "segment",
+    "name": "Segment",
+    "category": "analytics",
+    "docsUrl": "https://segment.com/docs",
+    "credentialFields": [
+      { "key": "writeKey", "label": "Write Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["segment", "SEGMENT_WRITE_KEY", "@segment/analytics-node"]
+  },
+  {
+    "id": "amplitude",
+    "name": "Amplitude",
+    "category": "analytics",
+    "docsUrl": "https://www.docs.developers.amplitude.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["amplitude", "AMPLITUDE_API_KEY", "@amplitude/"]
+  },
+  {
+    "id": "plausible",
+    "name": "Plausible",
+    "category": "analytics",
+    "docsUrl": "https://plausible.io/docs/stats-api",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true },
+      { "key": "siteId", "label": "Site ID / Domain", "placeholder": "yourdomain.com", "secret": false }
+    ],
+    "signals": ["plausible", "PLAUSIBLE_API_KEY"]
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "category": "devtools",
+    "docsUrl": "https://docs.github.com/en/rest",
+    "credentialFields": [
+      { "key": "token", "label": "Personal Access Token", "placeholder": "ghp_...", "secret": true }
+    ],
+    "signals": ["github", "GITHUB_TOKEN", "GH_TOKEN", "octokit", "@octokit/"]
+  },
+  {
+    "id": "linear",
+    "name": "Linear",
+    "category": "devtools",
+    "docsUrl": "https://developers.linear.app/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "lin_api_...", "secret": true }
+    ],
+    "signals": ["linear", "LINEAR_API_KEY", "@linear/sdk"]
+  },
+  {
+    "id": "jira",
+    "name": "Jira / Atlassian",
+    "category": "devtools",
+    "docsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3",
+    "credentialFields": [
+      { "key": "email", "label": "Email", "placeholder": "you@company.com", "secret": false },
+      { "key": "apiToken", "label": "API Token", "placeholder": "...", "secret": true },
+      { "key": "domain", "label": "Domain", "placeholder": "your-company.atlassian.net", "secret": false }
+    ],
+    "signals": ["jira", "JIRA_API_TOKEN", "ATLASSIAN_TOKEN", "jira-client"]
+  },
+  {
+    "id": "notion",
+    "name": "Notion",
+    "category": "devtools",
+    "docsUrl": "https://developers.notion.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "Integration Token", "placeholder": "secret_...", "secret": true }
+    ],
+    "signals": ["notion", "NOTION_API_KEY", "NOTION_TOKEN", "@notionhq/"]
+  },
+  {
+    "id": "airtable",
+    "name": "Airtable",
+    "category": "devtools",
+    "docsUrl": "https://airtable.com/developers/web/api",
+    "credentialFields": [
+      { "key": "apiKey", "label": "Personal Access Token", "placeholder": "pat...", "secret": true }
+    ],
+    "signals": ["airtable", "AIRTABLE_API_KEY", "airtable"]
+  },
+  {
+    "id": "algolia",
+    "name": "Algolia",
+    "category": "search",
+    "docsUrl": "https://www.algolia.com/doc/rest-api/search",
+    "credentialFields": [
+      { "key": "appId", "label": "Application ID", "placeholder": "...", "secret": false },
+      { "key": "apiKey", "label": "Admin API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["algolia", "ALGOLIA_APP_ID", "ALGOLIA_API_KEY", "algoliasearch"]
+  },
+  {
+    "id": "typesense",
+    "name": "Typesense",
+    "category": "search",
+    "docsUrl": "https://typesense.org/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true },
+      { "key": "host", "label": "Host", "placeholder": "xxx.a1.typesense.net", "secret": false }
+    ],
+    "signals": ["typesense", "TYPESENSE_API_KEY", "typesense"]
+  },
+  {
+    "id": "pinecone",
+    "name": "Pinecone",
+    "category": "ai",
+    "docsUrl": "https://docs.pinecone.io",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["pinecone", "PINECONE_API_KEY", "@pinecone-database/"]
+  },
+  {
+    "id": "weaviate",
+    "name": "Weaviate",
+    "category": "ai",
+    "docsUrl": "https://weaviate.io/developers/weaviate",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true },
+      { "key": "host", "label": "Host URL", "placeholder": "https://xxx.weaviate.network", "secret": false }
+    ],
+    "signals": ["weaviate", "WEAVIATE_API_KEY", "weaviate-ts-client"]
+  },
+  {
+    "id": "inngest",
+    "name": "Inngest",
+    "category": "devtools",
+    "docsUrl": "https://www.inngest.com/docs",
+    "credentialFields": [
+      { "key": "eventKey", "label": "Event Key", "placeholder": "...", "secret": true },
+      { "key": "signingKey", "label": "Signing Key", "placeholder": "signkey-...", "secret": true }
+    ],
+    "signals": ["inngest", "INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY", "inngest"]
+  },
+  {
+    "id": "qstash",
+    "name": "QStash (Upstash)",
+    "category": "devtools",
+    "docsUrl": "https://upstash.com/docs/qstash",
+    "credentialFields": [
+      { "key": "token", "label": "QSTASH_TOKEN", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["qstash", "QSTASH_TOKEN", "@upstash/qstash"]
+  },
+  {
+    "id": "trigger",
+    "name": "Trigger.dev",
+    "category": "devtools",
+    "docsUrl": "https://trigger.dev/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "tr_dev_...", "secret": true }
+    ],
+    "signals": ["trigger", "TRIGGER_API_KEY", "@trigger.dev/"]
+  },
+  {
+    "id": "sanity",
+    "name": "Sanity",
+    "category": "cms",
+    "docsUrl": "https://www.sanity.io/docs",
+    "credentialFields": [
+      { "key": "projectId", "label": "Project ID", "placeholder": "...", "secret": false },
+      { "key": "token", "label": "API Token", "placeholder": "sk...", "secret": true }
+    ],
+    "signals": ["sanity", "SANITY_PROJECT_ID", "SANITY_API_TOKEN", "@sanity/"]
+  },
+  {
+    "id": "contentful",
+    "name": "Contentful",
+    "category": "cms",
+    "docsUrl": "https://www.contentful.com/developers/docs",
+    "credentialFields": [
+      { "key": "spaceId", "label": "Space ID", "placeholder": "...", "secret": false },
+      { "key": "accessToken", "label": "Access Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["contentful", "CONTENTFUL_SPACE_ID", "CONTENTFUL_ACCESS_TOKEN", "contentful"]
+  },
+  {
+    "id": "shopify",
+    "name": "Shopify",
+    "category": "ecommerce",
+    "docsUrl": "https://shopify.dev/docs/api",
+    "credentialFields": [
+      { "key": "shopDomain", "label": "Shop Domain", "placeholder": "your-store.myshopify.com", "secret": false },
+      { "key": "accessToken", "label": "Admin API Access Token", "placeholder": "shpat_...", "secret": true }
+    ],
+    "signals": ["shopify", "SHOPIFY_ACCESS_TOKEN", "SHOPIFY_STORE_DOMAIN", "@shopify/"]
+  },
+  {
+    "id": "woocommerce",
+    "name": "WooCommerce",
+    "category": "ecommerce",
+    "docsUrl": "https://woocommerce.github.io/woocommerce-rest-api-docs",
+    "credentialFields": [
+      { "key": "url", "label": "Store URL", "placeholder": "https://yourstore.com", "secret": false },
+      { "key": "consumerKey", "label": "Consumer Key", "placeholder": "ck_...", "secret": false },
+      { "key": "consumerSecret", "label": "Consumer Secret", "placeholder": "cs_...", "secret": true }
+    ],
+    "signals": ["woocommerce", "WC_CONSUMER_KEY", "WC_CONSUMER_SECRET", "@woocommerce/"]
+  },
+  {
+    "id": "cloudinary",
+    "name": "Cloudinary",
+    "category": "media",
+    "docsUrl": "https://cloudinary.com/documentation",
+    "credentialFields": [
+      { "key": "cloudName", "label": "Cloud Name", "placeholder": "...", "secret": false },
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": false },
+      { "key": "apiSecret", "label": "API Secret", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["cloudinary", "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "cloudinary"]
+  },
+  {
+    "id": "uploadthing",
+    "name": "UploadThing",
+    "category": "media",
+    "docsUrl": "https://docs.uploadthing.com",
+    "credentialFields": [
+      { "key": "secret", "label": "Secret", "placeholder": "sk_live_...", "secret": true }
+    ],
+    "signals": ["uploadthing", "UPLOADTHING_SECRET", "uploadthing"]
+  },
+  {
+    "id": "mux",
+    "name": "Mux",
+    "category": "media",
+    "docsUrl": "https://docs.mux.com",
+    "credentialFields": [
+      { "key": "tokenId", "label": "Token ID", "placeholder": "...", "secret": false },
+      { "key": "tokenSecret", "label": "Token Secret", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["mux", "MUX_TOKEN_ID", "MUX_TOKEN_SECRET", "@mux/"]
+  },
+  {
+    "id": "openweather",
+    "name": "OpenWeatherMap",
+    "category": "data",
+    "docsUrl": "https://openweathermap.org/api",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["openweather", "OPENWEATHER_API_KEY", "WEATHER_API_KEY"]
+  },
+  {
+    "id": "mapbox",
+    "name": "Mapbox",
+    "category": "data",
+    "docsUrl": "https://docs.mapbox.com/api",
+    "credentialFields": [
+      { "key": "accessToken", "label": "Access Token", "placeholder": "pk.eyJ...", "secret": true }
+    ],
+    "signals": ["mapbox", "MAPBOX_ACCESS_TOKEN", "NEXT_PUBLIC_MAPBOX_TOKEN", "mapbox-gl"]
+  },
+  {
+    "id": "google-maps",
+    "name": "Google Maps",
+    "category": "data",
+    "docsUrl": "https://developers.google.com/maps",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "AIza...", "secret": true }
+    ],
+    "signals": ["google-maps", "GOOGLE_MAPS_API_KEY", "NEXT_PUBLIC_GOOGLE_MAPS_KEY"]
+  },
+  {
+    "id": "intercom",
+    "name": "Intercom",
+    "category": "support",
+    "docsUrl": "https://developers.intercom.com/docs",
+    "credentialFields": [
+      { "key": "accessToken", "label": "Access Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["intercom", "INTERCOM_ACCESS_TOKEN", "intercom-client"]
+  },
+  {
+    "id": "zendesk",
+    "name": "Zendesk",
+    "category": "support",
+    "docsUrl": "https://developer.zendesk.com/api-reference",
+    "credentialFields": [
+      { "key": "subdomain", "label": "Subdomain", "placeholder": "yourcompany", "secret": false },
+      { "key": "email", "label": "Email", "placeholder": "you@company.com", "secret": false },
+      { "key": "apiToken", "label": "API Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["zendesk", "ZENDESK_API_TOKEN", "ZENDESK_SUBDOMAIN", "node-zendesk"]
+  },
+  {
+    "id": "hubspot",
+    "name": "HubSpot",
+    "category": "crm",
+    "docsUrl": "https://developers.hubspot.com/docs/api",
+    "credentialFields": [
+      { "key": "accessToken", "label": "Private App Access Token", "placeholder": "pat-...", "secret": true }
+    ],
+    "signals": ["hubspot", "HUBSPOT_ACCESS_TOKEN", "@hubspot/api-client"]
+  },
+  {
+    "id": "salesforce",
+    "name": "Salesforce",
+    "category": "crm",
+    "docsUrl": "https://developer.salesforce.com/docs/apis",
+    "credentialFields": [
+      { "key": "instanceUrl", "label": "Instance URL", "placeholder": "https://yourorg.salesforce.com", "secret": false },
+      { "key": "accessToken", "label": "Access Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["salesforce", "SALESFORCE_ACCESS_TOKEN", "SALESFORCE_INSTANCE_URL", "jsforce"]
+  },
+  {
+    "id": "slack",
+    "name": "Slack",
+    "category": "messaging",
+    "docsUrl": "https://api.slack.com",
+    "credentialFields": [
+      { "key": "botToken", "label": "Bot Token", "placeholder": "xoxb-...", "secret": true }
+    ],
+    "signals": ["slack", "SLACK_BOT_TOKEN", "SLACK_WEBHOOK_URL", "@slack/bolt"]
+  },
+  {
+    "id": "discord",
+    "name": "Discord",
+    "category": "messaging",
+    "docsUrl": "https://discord.com/developers/docs",
+    "credentialFields": [
+      { "key": "botToken", "label": "Bot Token", "placeholder": "...", "secret": true },
+      { "key": "webhookUrl", "label": "Webhook URL", "placeholder": "https://discord.com/api/webhooks/...", "secret": true }
+    ],
+    "signals": ["discord", "DISCORD_BOT_TOKEN", "DISCORD_WEBHOOK_URL", "discord.js"]
+  },
+  {
+    "id": "telegram",
+    "name": "Telegram",
+    "category": "messaging",
+    "docsUrl": "https://core.telegram.org/bots/api",
+    "credentialFields": [
+      { "key": "botToken", "label": "Bot Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["telegram", "TELEGRAM_BOT_TOKEN", "telegraf", "node-telegram-bot-api"]
+  },
+  {
+    "id": "brex",
+    "name": "Brex",
+    "category": "finance",
+    "docsUrl": "https://developer.brex.com",
+    "credentialFields": [
+      { "key": "token", "label": "API Token", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["brex", "BREX_TOKEN", "BREX_API_KEY"]
+  },
+  {
+    "id": "mercury",
+    "name": "Mercury",
+    "category": "finance",
+    "docsUrl": "https://docs.mercury.com",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["mercury", "MERCURY_API_KEY"]
+  },
+  {
+    "id": "openrouter",
+    "name": "OpenRouter",
+    "category": "ai",
+    "docsUrl": "https://openrouter.ai/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "sk-or-...", "secret": true }
+    ],
+    "signals": ["openrouter", "OPENROUTER_API_KEY"]
+  },
+  {
+    "id": "groq",
+    "name": "Groq",
+    "category": "ai",
+    "docsUrl": "https://console.groq.com/docs",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "gsk_...", "secret": true }
+    ],
+    "signals": ["groq", "GROQ_API_KEY", "groq-sdk"]
+  },
+  {
+    "id": "together",
+    "name": "Together AI",
+    "category": "ai",
+    "docsUrl": "https://docs.together.ai",
+    "credentialFields": [
+      { "key": "apiKey", "label": "API Key", "placeholder": "...", "secret": true }
+    ],
+    "signals": ["together", "TOGETHER_API_KEY", "together-ai"]
+  }
+]

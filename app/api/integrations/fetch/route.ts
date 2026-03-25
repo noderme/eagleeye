@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { MOCK_MODE_ENABLED } from "@/lib/config";
 import { runAllProviders, type Credentials } from "@/lib/providers";
 import { discoverAndRegisterServices } from "@/lib/dynamic-providers";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
+  // Auth guard — skip in mock mode only
+  if (!MOCK_MODE_ENABLED) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { credentials, detectedProviders = [] } = await req.json();
 

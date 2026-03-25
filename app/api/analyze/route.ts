@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { MOCK_MODE_ENABLED } from "@/lib/config";
 
 // Lazy-initialize to avoid crash when ANTHROPIC_API_KEY is not set
 let _client: Anthropic | null = null;
@@ -11,13 +13,19 @@ function getClient(): Anthropic {
 }
 
 export async function POST(req: NextRequest) {
+  // Auth guard — skip in mock mode only
+  if (!MOCK_MODE_ENABLED) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { integrations } = await req.json();
 
     const stream = getClient().messages.stream({
-      model: "claude-opus-4-6",
+      model: "claude-3-5-sonnet-20241022",
       max_tokens: 8096,
-      thinking: { type: "adaptive" },
       system: `You are Eagle Eye, an AI dev infrastructure intelligence system. You have deep knowledge of every major developer tool and SaaS platform.
 
 Analyze ALL provided integration data across EVERY dimension below. Be specific — reference actual names, numbers, amounts, and dates from the data.

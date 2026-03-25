@@ -309,6 +309,26 @@ export default function DashboardPage() {
           ))}
         </div>
 
+        {/* ── EMPTY STATE: no scan yet and not loading ── */}
+        {!loading && !scanning && !result && (
+          <div className="bg-surface border border-border rounded-2xl p-10 flex flex-col items-center gap-4 text-center">
+            <div className="text-4xl">🦅</div>
+            <div>
+              <h3 className="text-[15px] font-semibold text-text mb-1">No scan data yet</h3>
+              <p className="text-[12px] text-muted max-w-sm">
+                Eagle Eye needs to scan your repositories and connected services to show insights.
+                Hit <span className="text-cyan font-semibold">Scan now</span> to run your first scan.
+              </p>
+            </div>
+            <button
+              onClick={triggerScan}
+              className="text-[12px] font-semibold text-bg px-5 py-2 rounded-lg bg-cyan hover:bg-cyan/90 transition-colors"
+            >
+              Run first scan
+            </button>
+          </div>
+        )}
+
         {/* ── PROVIDER HEALTH & SPEND ── */}
         {providerCards.length > 0 && (
           <div className="bg-surface border border-border rounded-2xl overflow-hidden">

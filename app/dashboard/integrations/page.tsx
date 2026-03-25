@@ -400,23 +400,10 @@ export default function IntegrationsPage() {
                 </div>
               ))}
 
-              {/* Key expiry date — optional */}
-              <div>
-                <label className="text-[10px] font-semibold text-muted uppercase tracking-[1px] block mb-1.5">
-                  Key expires on
-                  <span className="ml-1.5 normal-case text-muted/60 tracking-normal font-normal">(optional)</span>
-                </label>
-                <input
-                  type="date"
-                  value={inputs.keyExpiresAt ?? ""}
-                  onChange={e => setInputs(prev => ({ ...prev, keyExpiresAt: e.target.value }))}
-                  min={new Date().toISOString().split("T")[0]}
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-[12px] font-mono text-text outline-none focus:border-cyan/40 transition-colors"
-                />
-                <p className="text-[10px] text-muted mt-1.5">
-                  Eagle Eye uses this key to monitor spend, health, and usage. Leave blank if the key has no expiry.
-                </p>
-              </div>
+              {/* Key validity note */}
+              <p className="text-[10px] text-muted">
+                Eagle Eye will automatically validate this key when you save and alert you if it becomes invalid.
+              </p>
 
               {saveError?.id === provider.id && (
                 <div className="mb-2 px-3 py-2 rounded-lg bg-red/8 border border-red/20 text-[11px] text-red flex items-start gap-2">

@@ -127,7 +127,7 @@ export async function runAnalysis(
   const context = sections.join("\n\n");
 
   const stream = client.messages.stream({
-    model: "claude-opus-4-6",
+    model: "claude-3-5-sonnet-20241022",
     max_tokens: 8096,
     thinking: { type: "adaptive" },
     system: `You are Eagle Eye, an AI dev infrastructure intelligence system.

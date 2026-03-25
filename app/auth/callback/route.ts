@@ -24,8 +24,20 @@ export async function GET(req: NextRequest) {
           { user_id: userId, ciphertext, iv, updated_at: new Date().toISOString() },
           { onConflict: "user_id" }
         );
+
+        // Check if user has already completed onboarding by seeing if they have
+        // any saved repos — if yes, send them to dashboard instead of onboarding
+        const { data: repos } = await service
+          .from("user_repos")
+          .select("id")
+          .eq("user_id", userId)
+          .limit(1);
+
+        const hasCompletedOnboarding = repos && repos.length > 0;
+        const redirectTo = hasCompletedOnboarding ? "/dashboard" : "/onboarding";
+        return NextResponse.redirect(`${origin}${redirectTo}`);
       } catch {
-        // Non-fatal — user can still proceed, background jobs just won't have the token
+        // Non-fatal — fall through to onboarding as safe default
       }
     }
   }

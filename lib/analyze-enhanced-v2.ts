@@ -108,7 +108,7 @@ async function runAnalysisWithClaude(integrations: any): Promise<AnalysisResult>
 
   try {
     const message = await client.messages.create({
-      model: "claude-opus-4-6",
+      model: "claude-3-5-sonnet-20241022",
       max_tokens: 16000,
       thinking: {
         type: "enabled",

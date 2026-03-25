@@ -1,18 +1,16 @@
-// Dynamic service discovery and integration for unknown providers
-// When Eagle Eye encounters a new service, it automatically:
-// 1. Researches the service via web search
-// 2. Fetches official API documentation
-// 3. Determines required credentials
-// 4. Creates an integration dynamically
-// 5. Adapts the credential form to the service's requirements
+// Dynamic service discovery — hybrid approach:
+// 1. Static JSON registry covers 80+ common dev services (zero cost, instant)
+// 2. Generic credential inference as fallback for truly unknown providers
+// No LLM calls here — Claude is only used in analyze.ts for post-scan insights
 
 import { MOCK_MODE_ENABLED } from "./config";
+import registryData from "./provider-registry.json";
 
 export interface ServiceMetadata {
   id: string;
   name: string;
   description: string;
-  category: "cloud" | "ai" | "database" | "payments" | "monitoring" | "devops" | "other";
+  category: "cloud" | "ai" | "database" | "payments" | "monitoring" | "devops" | "email" | "messaging" | "auth" | "analytics" | "search" | "media" | "cms" | "ecommerce" | "realtime" | "devtools" | "finance" | "data" | "support" | "crm" | "hosting" | "other";
   website: string;
   docsUrl: string;
   apiBaseUrl: string;
@@ -30,167 +28,72 @@ export interface CredentialType {
   options?: { label: string; value: string }[];
 }
 
-// Service registry — dynamically populated as new services are discovered
+// ── Static registry loaded from JSON ──────────────────────────────────────────
+// Each entry has: id, name, category, docsUrl, credentialFields[], signals[]
+// signals[] are package names / env var names used to auto-detect the provider
+
+interface RegistryEntry {
+  id: string;
+  name: string;
+  category: string;
+  docsUrl: string;
+  credentialFields: Array<{ key: string; label: string; placeholder: string; secret: boolean }>;
+  signals: string[];
+}
+
+const STATIC_REGISTRY: RegistryEntry[] = registryData as RegistryEntry[];
+
+// Build a fast lookup map: signal → registry entry
+const SIGNAL_MAP = new Map<string, RegistryEntry>();
+for (const entry of STATIC_REGISTRY) {
+  // Index by id
+  SIGNAL_MAP.set(entry.id.toLowerCase(), entry);
+  // Index by each signal string
+  for (const signal of entry.signals) {
+    SIGNAL_MAP.set(signal.toLowerCase(), entry);
+  }
+}
+
+// Runtime registry for dynamically discovered / registered services
 const SERVICE_REGISTRY: Map<string, ServiceMetadata> = new Map();
 
-// Known service patterns for quick identification
-const KNOWN_SERVICE_PATTERNS: Record<string, Partial<ServiceMetadata>> = {
-  // AI/LLM Services
-  "gpt-4": {
-    name: "OpenAI GPT-4",
-    category: "ai",
-    website: "https://openai.com",
-    docsUrl: "https://platform.openai.com/docs",
-    apiBaseUrl: "https://api.openai.com/v1",
-  },
-  "claude": {
-    name: "Anthropic Claude",
-    category: "ai",
-    website: "https://anthropic.com",
-    docsUrl: "https://docs.anthropic.com",
-    apiBaseUrl: "https://api.anthropic.com/v1",
-  },
-  "gemini": {
-    name: "Google Gemini",
-    category: "ai",
-    website: "https://ai.google.dev",
-    docsUrl: "https://ai.google.dev/docs",
-    apiBaseUrl: "https://generativelanguage.googleapis.com/v1",
-  },
-  "mistral": {
-    name: "Mistral AI",
-    category: "ai",
-    website: "https://mistral.ai",
-    docsUrl: "https://docs.mistral.ai",
-    apiBaseUrl: "https://api.mistral.ai/v1",
-  },
-  // Database Services
-  "mongodb": {
-    name: "MongoDB",
-    category: "database",
-    website: "https://mongodb.com",
-    docsUrl: "https://docs.mongodb.com/manual/reference/api/",
-    apiBaseUrl: "https://api.mongodb.com/api/atlas/v1.0",
-  },
-  "postgres": {
-    name: "PostgreSQL",
-    category: "database",
-    website: "https://postgresql.org",
-    docsUrl: "https://www.postgresql.org/docs/",
-    apiBaseUrl: "https://api.postgresql.com",
-  },
-  "firebase": {
-    name: "Firebase",
-    category: "cloud",
-    website: "https://firebase.google.com",
-    docsUrl: "https://firebase.google.com/docs",
-    apiBaseUrl: "https://firebaseio.com",
-  },
-  // Monitoring/Analytics
-  "datadog": {
-    name: "Datadog",
-    category: "monitoring",
-    website: "https://datadoghq.com",
-    docsUrl: "https://docs.datadoghq.com/api/latest/",
-    apiBaseUrl: "https://api.datadoghq.com/api/v1",
-  },
-  "newrelic": {
-    name: "New Relic",
-    category: "monitoring",
-    website: "https://newrelic.com",
-    docsUrl: "https://docs.newrelic.com/docs/apis/rest-api-overview/",
-    apiBaseUrl: "https://api.newrelic.com",
-  },
-  "sentry": {
-    name: "Sentry",
-    category: "monitoring",
-    website: "https://sentry.io",
-    docsUrl: "https://docs.sentry.io/api/",
-    apiBaseUrl: "https://sentry.io/api/0",
-  },
-  // DevOps/CI-CD
-  "github": {
-    name: "GitHub",
-    category: "devops",
-    website: "https://github.com",
-    docsUrl: "https://docs.github.com/en/rest",
-    apiBaseUrl: "https://api.github.com",
-  },
-  "gitlab": {
-    name: "GitLab",
-    category: "devops",
-    website: "https://gitlab.com",
-    docsUrl: "https://docs.gitlab.com/ee/api/",
-    apiBaseUrl: "https://gitlab.com/api/v4",
-  },
-  "circleci": {
-    name: "CircleCI",
-    category: "devops",
-    website: "https://circleci.com",
-    docsUrl: "https://circleci.com/docs/api/v2/",
-    apiBaseUrl: "https://circleci.com/api/v2",
-  },
-  "jenkins": {
-    name: "Jenkins",
-    category: "devops",
-    website: "https://jenkins.io",
-    docsUrl: "https://www.jenkins.io/doc/book/using/remote-access-api/",
-    apiBaseUrl: "https://jenkins.example.com/api",
-  },
-  // Payment Services
-  "stripe": {
-    name: "Stripe",
-    category: "payments",
-    website: "https://stripe.com",
-    docsUrl: "https://stripe.com/docs/api",
-    apiBaseUrl: "https://api.stripe.com/v1",
-  },
-  "paypal": {
-    name: "PayPal",
-    category: "payments",
-    website: "https://paypal.com",
-    docsUrl: "https://developer.paypal.com/docs/api/overview/",
-    apiBaseUrl: "https://api.paypal.com",
-  },
-  // Cloud Providers
-  "aws": {
-    name: "Amazon AWS",
-    category: "cloud",
-    website: "https://aws.amazon.com",
-    docsUrl: "https://docs.aws.amazon.com/",
-    apiBaseUrl: "https://api.aws.amazon.com",
-  },
-  "gcp": {
-    name: "Google Cloud Platform",
-    category: "cloud",
-    website: "https://cloud.google.com",
-    docsUrl: "https://cloud.google.com/docs",
-    apiBaseUrl: "https://www.googleapis.com",
-  },
-  "azure": {
-    name: "Microsoft Azure",
-    category: "cloud",
-    website: "https://azure.microsoft.com",
-    docsUrl: "https://docs.microsoft.com/en-us/azure/",
-    apiBaseUrl: "https://management.azure.com",
-  },
-};
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function registryEntryToMetadata(entry: RegistryEntry): ServiceMetadata {
+  return {
+    id: entry.id,
+    name: entry.name,
+    description: `${entry.name} integration`,
+    category: entry.category as ServiceMetadata["category"],
+    website: `https://${entry.id}.com`,
+    docsUrl: entry.docsUrl,
+    apiBaseUrl: `https://api.${entry.id}.com`,
+    credentialTypes: entry.credentialFields.map((f) => ({
+      name: f.label,
+      key: f.key,
+      type: f.secret ? "password" : "text",
+      required: true,
+      placeholder: f.placeholder,
+      description: f.label,
+    })),
+    mockData: MOCK_MODE_ENABLED ? generateMockDataForService(entry.id, entry.category) : undefined,
+  };
+}
 
 /**
- * Detect if a service name matches a known pattern
+ * Detect if a service name matches a known pattern in the static registry
  */
 export function identifyService(serviceId: string): Partial<ServiceMetadata> | null {
   const lower = serviceId.toLowerCase();
-  
-  // Direct match
-  if (KNOWN_SERVICE_PATTERNS[lower]) {
-    return KNOWN_SERVICE_PATTERNS[lower];
-  }
 
-  // Partial match (e.g., "openai" matches "openai-gpt4")
-  for (const [key, metadata] of Object.entries(KNOWN_SERVICE_PATTERNS)) {
-    if (lower.includes(key) || key.includes(lower)) {
-      return metadata;
+  // Exact match
+  const exact = SIGNAL_MAP.get(lower);
+  if (exact) return registryEntryToMetadata(exact);
+
+  // Partial match — serviceId contains or is contained by a signal
+  for (const [signal, entry] of SIGNAL_MAP.entries()) {
+    if (lower.includes(signal) || signal.includes(lower)) {
+      return registryEntryToMetadata(entry);
     }
   }
 
@@ -198,22 +101,20 @@ export function identifyService(serviceId: string): Partial<ServiceMetadata> | n
 }
 
 /**
- * Infer credential types based on service category and common patterns
+ * Infer credential types for completely unknown providers
  */
 export function inferCredentialTypes(serviceId: string, category: string): CredentialType[] {
-  const credentials: CredentialType[] = [];
+  const credentials: CredentialType[] = [
+    {
+      name: "API Key",
+      key: "apiKey",
+      type: "password",
+      required: true,
+      placeholder: "Enter your API key",
+      description: "Your API key for authentication",
+    },
+  ];
 
-  // Most services require an API key
-  credentials.push({
-    name: "API Key",
-    key: "apiKey",
-    type: "password",
-    required: true,
-    placeholder: "Enter your API key",
-    description: "Your API key for authentication",
-  });
-
-  // Some services require additional credentials
   if (category === "cloud" || serviceId.includes("aws") || serviceId.includes("gcp")) {
     credentials.push({
       name: "Region",
@@ -225,39 +126,6 @@ export function inferCredentialTypes(serviceId: string, category: string): Crede
     });
   }
 
-  if (serviceId.includes("twilio") || serviceId.includes("account")) {
-    credentials.push({
-      name: "Account SID",
-      key: "accountSid",
-      type: "text",
-      required: true,
-      placeholder: "Your account SID",
-      description: "Account identifier",
-    });
-  }
-
-  if (serviceId.includes("stripe") || serviceId.includes("payment")) {
-    credentials.push({
-      name: "Publishable Key",
-      key: "publishableKey",
-      type: "text",
-      required: false,
-      placeholder: "pk_...",
-      description: "Optional publishable key for client-side use",
-    });
-  }
-
-  if (serviceId.includes("github") || serviceId.includes("gitlab")) {
-    credentials.push({
-      name: "Organization",
-      key: "organization",
-      type: "text",
-      required: false,
-      placeholder: "org-name",
-      description: "Optional organization name",
-    });
-  }
-
   return credentials;
 }
 
@@ -265,16 +133,10 @@ export function inferCredentialTypes(serviceId: string, category: string): Crede
  * Generate mock data for a service based on its category
  */
 export function generateMockDataForService(serviceId: string, category: string): Record<string, any> {
-  const timestamp = new Date().toISOString();
-
   switch (category) {
     case "ai":
       return {
         provider: serviceId,
-        models: [
-          { id: "model-1", name: "Latest Model", status: "active" },
-          { id: "model-2", name: "Previous Model", status: "active" },
-        ],
         usage: { tokens: 1_234_567, cost: 12.34 },
         _summary: "AI service active",
         _signal: "Ready to process requests",
@@ -285,7 +147,6 @@ export function generateMockDataForService(serviceId: string, category: string):
         provider: serviceId,
         databases: 3,
         storage: "2.5 GB / 10 GB",
-        connections: 45,
         _summary: "3 databases · 2.5 GB used",
         _signal: "Database health is good",
         _status: "good",
@@ -295,7 +156,6 @@ export function generateMockDataForService(serviceId: string, category: string):
         provider: serviceId,
         balance: 5234.56,
         currency: "USD",
-        transactions: 127,
         _summary: "$5,234.56 available",
         _signal: "Payment processing active",
         _status: "good",
@@ -303,31 +163,19 @@ export function generateMockDataForService(serviceId: string, category: string):
     case "monitoring":
       return {
         provider: serviceId,
-        alerts: 2,
-        incidents: 0,
         uptime: "99.95%",
         _summary: "99.95% uptime",
         _signal: "System health is excellent",
         _status: "good",
       };
-    case "devops":
-      return {
-        provider: serviceId,
-        repositories: 8,
-        pipelines: 12,
-        lastRun: timestamp,
-        _summary: "8 repos · 12 pipelines",
-        _signal: "CI/CD pipeline operational",
-        _status: "good",
-      };
+    case "hosting":
     case "cloud":
       return {
         provider: serviceId,
         resources: 15,
         spend: 234.56,
-        region: "us-east-1",
         _summary: "15 resources · $234.56/mo",
-        _signal: "Cloud infrastructure healthy",
+        _signal: "Infrastructure healthy",
         _status: "good",
       };
     default:
@@ -362,18 +210,19 @@ export function registerService(serviceId: string, metadata: Partial<ServiceMeta
 }
 
 /**
- * Get service metadata by ID
+ * Get service metadata by ID — checks static registry first, then runtime registry
  */
 export function getService(serviceId: string): ServiceMetadata | null {
-  // Check registry first
+  // Check runtime registry first (user-registered or previously resolved)
   if (SERVICE_REGISTRY.has(serviceId)) {
     return SERVICE_REGISTRY.get(serviceId) || null;
   }
 
-  // Try to identify and register
+  // Try static registry
   const identified = identifyService(serviceId);
-  if (identified) {
-    return registerService(serviceId, identified);
+  if (identified && identified.id) {
+    const full = registerService(serviceId, identified);
+    return full;
   }
 
   return null;
@@ -387,7 +236,35 @@ export function getAllServices(): ServiceMetadata[] {
 }
 
 /**
- * Fetch API documentation for a service (mock implementation)
+ * Get all providers from the static registry (for display/search)
+ */
+export function getStaticRegistry(): RegistryEntry[] {
+  return STATIC_REGISTRY;
+}
+
+/**
+ * Discover and register all services from detected provider list
+ */
+export async function discoverAndRegisterServices(detectedProviders: string[]): Promise<ServiceMetadata[]> {
+  const registered: ServiceMetadata[] = [];
+  for (const providerId of detectedProviders) {
+    const service = getService(providerId);
+    if (service) {
+      registered.push(service);
+    } else {
+      // Unknown provider — register with generic credentials
+      const generic = registerService(providerId, {
+        name: providerId.charAt(0).toUpperCase() + providerId.slice(1),
+        category: "other",
+      });
+      registered.push(generic);
+    }
+  }
+  return registered;
+}
+
+/**
+ * Fetch API documentation for a service
  */
 export async function fetchServiceDocumentation(serviceId: string): Promise<string> {
   if (MOCK_MODE_ENABLED) {
@@ -406,29 +283,3 @@ export async function fetchServiceDocumentation(serviceId: string): Promise<stri
     return `Failed to fetch documentation from ${service.docsUrl}`;
   }
 }
-
-/**
- * Discover and register all services from detected provider list
- */
-export async function discoverAndRegisterServices(detectedProviders: string[]): Promise<ServiceMetadata[]> {
-  const registered: ServiceMetadata[] = [];
-
-  for (const providerId of detectedProviders) {
-    const service = getService(providerId);
-    if (service) {
-      registered.push(service);
-    }
-  }
-
-  return registered;
-}
-
-// Initialize with known services
-export function initializeServiceRegistry(): void {
-  for (const [id, metadata] of Object.entries(KNOWN_SERVICE_PATTERNS)) {
-    registerService(id, metadata);
-  }
-}
-
-// Auto-initialize on module load
-initializeServiceRegistry();
