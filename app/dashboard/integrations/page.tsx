@@ -189,7 +189,7 @@ export default function IntegrationsPage() {
 
         // Any connected provider not in our PROVIDERS list is a custom one
         // Exclude llm_* providers (they live in the Analysis Engine section)
-        const knownIds = new Set(PROVIDERS.map(p => p.id).concat(["domains", "llm_openai", "llm_anthropic", "llm_gemini"]));
+        const knownIds = new Set(PROVIDERS.map(p => p.id).concat(["domains", "llm_openai", "llm_anthropic", "llm_gemini", "llm_ollama"]));
         const custom = (status.integrations ?? [])
           .map((i: any) => i.provider as string)
           .filter((p: string) => !knownIds.has(p));
@@ -836,6 +836,7 @@ const LLM_PROVIDERS = [
   { id: "llm_openai", name: "OpenAI", emoji: "🤖", placeholder: "sk-...", hint: "Uses gpt-4o-mini. Get your key at platform.openai.com → API Keys." },
   { id: "llm_anthropic", name: "Anthropic", emoji: "🧠", placeholder: "sk-ant-...", hint: "Uses claude-3-5-sonnet. Get your key at console.anthropic.com → API Keys." },
   { id: "llm_gemini", name: "Gemini", emoji: "✨", placeholder: "AIza...", hint: "Uses gemini-2.0-flash (free tier available). Get your key at aistudio.google.com → Get API Key." },
+  { id: "llm_ollama", name: "Ollama (Local / Free)", emoji: "🦙", placeholder: "http://localhost:11434", hint: "Free, runs on your machine. Install from ollama.ai, then run: ollama pull llama3.1:8b. Enter your Ollama base URL (default: http://localhost:11434). Best for local testing." },
 ];
 
 function LLMKeySection({ connected, setConnected }: { connected: Set<string>; setConnected: (s: Set<string>) => void }) {

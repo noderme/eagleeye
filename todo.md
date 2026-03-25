@@ -1,28 +1,60 @@
-# Eagle Eye — Fix Tracker
+# Eagle Eye — Project TODO
 
-## Critical Security
-- [x] Add auth guard to /api/integrations/fetch (unauthenticated endpoint)
-- [x] Add auth guard to /api/analyze (unauthenticated endpoint — Anthropic cost exposure)
+## Core Vision
+Build a fully dynamic infrastructure monitoring tool. No hardcoded provider connectors.
+The LLM discovers API endpoints automatically for any service. Users add a key — Eagle Eye figures out the rest.
 
-## High Bugs
-- [x] Fix wrong Claude model name in /api/analyze (claude-opus-4-6 → claude-3-5-sonnet-20241022)
-- [x] Fix mock mode silent fallback — show error if Supabase env vars missing in production
-- [x] Fix auth callback always redirecting returning users to /onboarding
+---
 
-## Medium UX
-- [x] Remove manual "Key expires on" date field from integrations page
-- [x] Add TTL to scan cache (already implemented — 5 min TTL confirmed in scan-cache.ts)
-- [x] Add empty state on dashboard when no repos/scan data
+## Phase 1 — Dynamic Discovery Engine
+- [x] Build LLM-powered endpoint discovery: given a service name + credentials, LLM fetches docs, identifies monitoring-relevant endpoints (usage, billing, health, limits, quotas)
+- [x] Endpoint verification layer: call every discovered endpoint with user's key, keep only those that return 200 + real data
+- [x] Save verified endpoint map to database per provider (reuse for all future users of same service) — `lib/endpoint-store.ts`
+- [x] Community sharing via `provider_endpoint_maps` table — once one user discovers a service, all users benefit
+- [ ] Add web search tool to discovery agent so it reads actual live API documentation (currently uses LLM training knowledge)
 
-## User LLM Key (Bring Your Own Key)
-- [ ] Add LLM provider section to integrations page (OpenAI / Anthropic / Gemini key input)
-- [ ] Update key storage API to handle llm_openai, llm_anthropic, llm_gemini provider types
-- [ ] Rewrite /api/analyze to use user's stored LLM key instead of server env var
-- [ ] Multi-provider routing: OpenAI → gpt-4o-mini, Anthropic → claude-3-5-sonnet, Gemini → gemini-1.5-flash
-- [ ] Show "Add LLM key to enable AI insights" prompt on dashboard when no LLM key configured
+## Phase 2 — Failure Detection
+- [x] Loud credential failure alerts: 401/403 responses trigger `_credentialError` flag + red banner on dashboard
+- [x] Soft error detection: full raw response bodies passed to LLM — catches "quota_exceeded: true" inside 200 responses
+- [x] Two alert tiers: "Key broken" (hard error, red) vs "Limit approaching" (soft warning, amber)
+- [ ] Coverage scoring: show user how many endpoints returned useful data vs empty responses
 
-## Architecture
-- [x] Replace dynamic provider discovery with hybrid approach:
-  - [x] Built static registry of 80+ common dev services in provider-registry.json
-  - [x] Generic credential inference fallback for truly unknown providers (no LLM cost)
-  - [x] dynamic-providers.ts rewritten to use static registry as primary lookup
+## Phase 3 — Local Testing with Ollama
+- [x] Add Ollama as LLM provider option in integrations page (`llm_ollama`)
+- [x] `callLLM` in `analyze.ts` supports Ollama via OpenAI-compatible API
+- [x] Discovery engine supports Ollama provider
+- [x] Scan trigger handles Ollama key (URL as the key value)
+- [ ] Document local setup: ollama install + pull model + set env vars
+
+## Phase 4 — Per-Provider Grouped Summaries & Dashboard
+- [x] `summarizeProviderData` function — LLM extracts grouped structured output per provider
+- [x] Groups: health / usage / billing / limits / warnings
+- [x] `DynamicProviderCard` component — renders grouped data as clean card rows
+- [x] "Service Intelligence" section on dashboard — shows all LLM-discovered providers
+- [x] Credential error state on cards — clear "Update key in Integrations" message
+- [x] Status indicator per provider: good / warn / critical / credential_error
+- [x] `providers-dynamic.ts` — orchestrates known + unknown providers, attaches `_providerSummary`
+
+## Phase 5 — Quality & Launch Readiness
+- [ ] Run Supabase migration SQL in production (`supabase-migration.sql`)
+- [ ] Set `ENCRYPTION_KEY` in Vercel environment variables
+- [ ] Set `NEXT_PUBLIC_USE_MOCK_DATA=false` in Vercel
+- [ ] End-to-end test with real API keys (OpenAI, Stripe, Supabase minimum)
+- [ ] Test dynamic discovery with at least one unknown provider (e.g., PlanetScale, Neon)
+- [ ] Test Ollama local flow
+- [ ] Add `pom.xml` and `build.gradle` to `detect.ts` for Java/Maven support
+- [ ] Add web search capability to discovery agent (currently uses LLM training knowledge only)
+- [ ] HN launch post preparation
+
+---
+
+## Already Done (Pre-session)
+- [x] Auth guard on all API routes
+- [x] GitHub OAuth via Supabase
+- [x] GitHub repo scanning + provider detection (package.json, requirements.txt, go.mod, Gemfile)
+- [x] Dashboard UI with scan results
+- [x] Scan cache with TTL
+- [x] Empty state on dashboard
+- [x] Domain expiry monitoring
+- [x] Mock mode for development
+- [x] QStash background scan jobs

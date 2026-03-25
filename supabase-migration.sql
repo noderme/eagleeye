@@ -62,3 +62,18 @@ alter table user_repos enable row level security;
 create policy "users manage own repos"
   on user_repos for all
   using (auth.uid() = user_id);
+
+-- 5. Provider endpoint maps — cached by discovery engine (shared across all users)
+-- Once Eagle Eye discovers endpoints for "stripe", all users benefit from the cache
+create table if not exists provider_endpoint_maps (
+  id                 uuid primary key default gen_random_uuid(),
+  service_id         text not null unique,
+  endpoint_map       jsonb not null default '{}',
+  discovery_version  int not null default 1,
+  created_at         timestamptz default now(),
+  updated_at         timestamptz default now()
+);
+alter table provider_endpoint_maps enable row level security;
+create policy "public read endpoint maps"
+  on provider_endpoint_maps for select
+  using (true);

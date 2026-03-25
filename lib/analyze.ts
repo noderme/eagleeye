@@ -12,7 +12,7 @@ import { summarizeDomains, minDomainDaysLeft } from "./summarize/domains";
 import { summarizeKeyExpiry, minKeyExpiryDays } from "./summarize/keymeta";
 
 // ── LLM provider types ───────────────────────────────────────────────────────
-export type LLMProvider = "anthropic" | "openai" | "gemini";
+export type LLMProvider = "anthropic" | "openai" | "gemini" | "ollama";
 
 export interface LLMKey {
   provider: LLMProvider;
@@ -112,6 +112,22 @@ async function callLLM(systemPrompt: string, userContent: string, llmKey: LLMKey
       contents: [{ role: "user", parts: [{ text: userContent }] }],
     });
     return result.response.text();
+  }
+
+  // Ollama: OpenAI-compatible local endpoint
+  if (llmKey.provider === "ollama") {
+    const baseURL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
+    const model = process.env.OLLAMA_MODEL ?? "llama3.1:8b";
+    const client = new OpenAI({ apiKey: "ollama", baseURL, timeout: 120_000 });
+    const resp = await client.chat.completions.create({
+      model,
+      max_tokens: 8000,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+    });
+    return resp.choices[0]?.message?.content ?? "";
   }
 
   // Default: Anthropic

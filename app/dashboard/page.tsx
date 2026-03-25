@@ -8,6 +8,8 @@ import { timeAgo } from "@/lib/github";
 import type { RepoInsight } from "@/lib/github";
 import type { Recommendation } from "@/lib/analyze";
 import { getCachedScan, setCachedScan } from "@/lib/scan-cache";
+import { DynamicProviderCard } from "@/components/dynamic-provider-card";
+import type { ProviderSummary } from "@/lib/discovery-engine";
 
 const SCAN_STEPS = [
   "Connecting to GitHub...",
@@ -206,6 +208,57 @@ export default function DashboardPage() {
     });
   }
 
+  // ── Dynamic provider cards (for any service discovered via LLM) ──
+  const KNOWN_PROVIDER_IDS = new Set(["openai","stripe","vercel","anthropic","supabase","resend","twilio","github"]);
+  const PROVIDER_EMOJIS: Record<string, string> = {
+    planetscale: "🪐", neon: "⚡", railway: "🚂", render: "🎨", fly: "✈️",
+    cloudflare: "☁️", aws: "🟠", gcp: "🔵", azure: "🔷", mongodb: "🍃",
+    redis: "🔴", sendgrid: "📨", mailgun: "📪", datadog: "🐕", sentry: "🔍",
+    linear: "📐", notion: "📝", airtable: "📊", hubspot: "🧡", salesforce: "☁️",
+  };
+  for (const [provId, provData] of Object.entries(providers)) {
+    if (KNOWN_PROVIDER_IDS.has(provId)) continue;
+    if (!provData || typeof provData !== "object") continue;
+    const d = provData as any;
+    const hasCredError = d._credentialError === true;
+    const emoji = PROVIDER_EMOJIS[provId] ?? "🔌";
+    const label = provId.charAt(0).toUpperCase() + provId.slice(1);
+    const summaryParts = d._summary ? d._summary.split("·") : [];
+    const value = hasCredError ? "Key Error" : (summaryParts[1]?.trim() ?? "Connected");
+    const sub = hasCredError ? (d._credentialMessage ?? "Invalid or expired API key") : (d._signal ?? d._summary ?? "");
+    providerCards.push({
+      id: provId, emoji, label,
+      value,
+      sub: sub.length > 60 ? sub.slice(0, 57) + "..." : sub,
+      color: hasCredError ? "var(--red)" : d._status === "warn" ? "var(--amber)" : "var(--text)",
+    });
+  }
+
+  // ── Dynamic provider summaries (rich grouped cards from LLM discovery) ──
+  const dynamicProviderSummaries: ProviderSummary[] = [];
+  for (const [, provData] of Object.entries(providers)) {
+    const d = provData as any;
+    if (d?._providerSummary) {
+      dynamicProviderSummaries.push(d._providerSummary as ProviderSummary);
+    }
+  }
+
+  // ── Credential failure alerts (loud banners for invalid/expired keys) ──
+  const credentialErrors: { provider: string; message: string }[] = [];
+  for (const [provId, provData] of Object.entries(providers)) {
+    const d = provData as any;
+    if (!d) continue;
+    if (
+      d._credentialError === true ||
+      (d.error && (d.error.includes("Invalid") || d.error.includes("401") || d.error.includes("403") || d.error.includes("invalid")))
+    ) {
+      credentialErrors.push({
+        provider: provId.charAt(0).toUpperCase() + provId.slice(1),
+        message: d._credentialMessage ?? d.error ?? "API key may be invalid or expired. Update it in Integrations.",
+      });
+    }
+  }
+
   const providerCols = Math.min(providerCards.length, 4);
 
   return (
@@ -324,6 +377,28 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* ── CREDENTIAL ERROR BANNERS (loud, per-provider) ── */}
+        {credentialErrors.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {credentialErrors.map(({ provider, message }) => (
+              <div key={provider} className="bg-red/5 border border-red/25 rounded-2xl px-5 py-4 flex items-start gap-3">
+                <span className="text-xl mt-0.5">🔑</span>
+                <div className="flex-1">
+                  <div className="text-[13px] font-semibold text-red mb-1">
+                    {provider} — API key invalid or expired
+                  </div>
+                  <div className="text-[12px] text-muted">
+                    {message}{" "}
+                    <a href="/dashboard/integrations" className="text-cyan underline underline-offset-2 hover:text-cyan/80">
+                      Update in Integrations →
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── EMPTY STATE: no scan yet and not loading ── */}
         {!loading && !scanning && !result && (
           <div className="bg-surface border border-border rounded-2xl p-10 flex flex-col items-center gap-4 text-center">
@@ -385,6 +460,22 @@ export default function DashboardPage() {
                   <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: "1.4" }}>{card.sub}</div>
                   {card.extra}
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── SERVICE INTELLIGENCE (LLM-discovered providers with grouped data) ── */}
+        {dynamicProviderSummaries.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-purple" />
+              <h2 className="text-[13px] font-semibold text-text">Service Intelligence</h2>
+              <span className="text-[10px] font-mono text-muted">{dynamicProviderSummaries.length} service{dynamicProviderSummaries.length !== 1 ? "s" : ""} scanned</span>
+            </div>
+            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+              {dynamicProviderSummaries.map((summary) => (
+                <DynamicProviderCard key={summary.serviceId} summary={summary} />
               ))}
             </div>
           </div>

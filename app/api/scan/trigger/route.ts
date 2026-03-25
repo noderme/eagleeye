@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { decrypt } from "@/lib/crypto";
-import { runAllProviders, type Credentials } from "@/lib/providers";
+import { runAllProvidersDynamic, type Credentials } from "@/lib/providers-dynamic";
 import { fetchAllRepoInsights, type RepoSummary } from "@/lib/github";
 import { runAnalysis, type LLMKey } from "@/lib/analyze";
 import { MOCK_MODE_ENABLED } from "@/lib/config";
@@ -90,6 +90,11 @@ export async function POST() {
         llmKey = llmKey ?? { provider: "anthropic", apiKey: value.key }; // openai takes priority if both set
       } else if (row.provider === "llm_gemini") {
         llmKey = llmKey ?? { provider: "gemini", apiKey: value.key };
+      } else if (row.provider === "llm_ollama") {
+        // For Ollama, the "key" field stores the base URL
+        const ollamaUrl = value.key?.trim() || "http://localhost:11434";
+        process.env.OLLAMA_BASE_URL = ollamaUrl;
+        llmKey = llmKey ?? { provider: "ollama", apiKey: "ollama" };
       } else if (row.provider === "domains") {
         domains.push(...(row.extra_config?.domains ?? []));
       } else {
@@ -103,7 +108,7 @@ export async function POST() {
       githubToken && repos.length > 0
         ? fetchAllRepoInsights(repos, githubToken)
         : Promise.resolve([]),
-      runAllProviders(credentials, domains),
+      runAllProvidersDynamic(credentials, domains, llmKey),
     ]);
 
     // Run LLM analysis — requires user-provided LLM key
