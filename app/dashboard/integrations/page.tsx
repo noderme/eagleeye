@@ -142,6 +142,20 @@ export default function IntegrationsPage() {
   const [customForm, setCustomForm] = useState<{ name: string; fields: { key: string; value: string }[] } | null>(null);
   const [scanAge, setScanAge] = useState<string | null>(null);
   const [rescanning, setRescanning] = useState(false);
+  const [rediscovering, setRediscovering] = useState<string | null>(null);
+  const [rediscoverMsg, setRediscoverMsg] = useState<string | null>(null);
+
+  async function forceRediscover(id: string) {
+    setRediscovering(id);
+    setRediscoverMsg(null);
+    try {
+      await fetch(`/api/cache/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setRediscoverMsg(id);
+      setTimeout(() => setRediscoverMsg(null), 3000);
+    } finally {
+      setRediscovering(null);
+    }
+  }
 
   async function rescan() {
     setRescanning(true);
@@ -422,6 +436,17 @@ export default function IntegrationsPage() {
                   <Check className="w-3.5 h-3.5" />
                   {saving === provider.id ? "Validating..." : savedMsg === provider.id ? "Saved!" : isConn ? "Update" : "Connect"}
                 </button>
+                {isConn && (
+                  <button
+                    onClick={() => forceRediscover(provider.id)}
+                    disabled={rediscovering === provider.id}
+                    title="Clear cached endpoint map — next scan will re-run full LLM discovery"
+                    className="flex items-center gap-1.5 px-3 py-2 text-[12px] text-amber border border-amber/20 rounded-lg hover:bg-amber/5 transition-colors disabled:opacity-60"
+                  >
+                    <RefreshCw className={clsx("w-3 h-3", rediscovering === provider.id && "animate-spin")} />
+                    {rediscovering === provider.id ? "Clearing..." : rediscoverMsg === provider.id ? "✓ Cache cleared!" : "Force Re-discover"}
+                  </button>
+                )}
                 {isConn && (
                   <button
                     onClick={() => disconnect(provider.id)}
