@@ -119,9 +119,24 @@ async function runDynamicProviderWithCache(
     cachedMap
   );
 
-  // Save updated endpoint map back to DB (with verification results)
-  if (!cachedMap || endpointMap.endpoints.some(e => e.verified !== cachedMap.endpoints.find(c => c.url === e.url)?.verified)) {
-    await saveEndpointMap(supabase, serviceId, endpointMap);
+  // Save updated endpoint map back to DB — but ONLY store verified endpoints.
+  // Discovery collects ALL GET endpoints from docs (no pre-filter).
+  // Verification is the real gate: only endpoints that returned real data get cached.
+  // This means future scans skip endpoints that never worked, keeping the cache lean.
+  const verifiedEndpoints = endpointMap.endpoints.filter(e => e.verified === true);
+  const hasNewVerifications = verifiedEndpoints.length > 0 &&
+    (!cachedMap || verifiedEndpoints.some(e => !cachedMap.endpoints.find(c => c.url === e.url && c.verified)));
+
+  if (hasNewVerifications || !cachedMap) {
+    const mapToSave = {
+      ...endpointMap,
+      endpoints: verifiedEndpoints,
+    };
+    await saveEndpointMap(supabase, serviceId, mapToSave);
+    console.log(
+      `[Cache] ${serviceId}: saved ${verifiedEndpoints.length} verified endpoints ` +
+      `(dropped ${endpointMap.endpoints.length - verifiedEndpoints.length} unverified)`
+    );
   }
 
   // Attach structured summary for dashboard rendering

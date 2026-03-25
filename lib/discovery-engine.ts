@@ -279,27 +279,33 @@ export async function discoverEndpoints(
   );
 
   // ── Step 2: Build the LLM prompt with actual doc content ─────────────────
-  const systemPrompt = `You are Eagle Eye's API discovery agent. Your job is to find ALL monitoring-relevant API endpoints for a given service.
+  // NOTE: No pre-filtering here. We collect ALL GET endpoints from the docs.
+  // The verification step (verifyAndFetch) is the real gate — it calls every endpoint
+  // with real credentials and only keeps those that return actual data.
+  // Pre-filtering by "monitoring-relevant" caused us to miss endpoints and rely on
+  // LLM judgment about what MIGHT be useful before we even know what the endpoint returns.
+  const systemPrompt = `You are Eagle Eye's API discovery agent. Your job is to extract ALL GET endpoints from the provided API documentation.
 
-MONITORING-RELEVANT means endpoints that return any of:
-- Usage statistics (API calls, tokens, requests, bandwidth, storage)
-- Billing information (current spend, invoices, subscription plan, limits)
-- Health status (service health, uptime, degradation)
-- Quota/limit information (rate limits, hard limits, soft limits, remaining quota)
-- Account/organization information (plan tier, features, seats)
-
-You have been given REAL documentation fetched from the web. Read it carefully and extract endpoints from what you actually see — do NOT rely on your training knowledge.
-
-IMPORTANT:
+RULES:
+- Extract EVERY GET endpoint you find in the documentation — do not pre-filter or skip any
+- We will call each endpoint with real credentials to discover which ones return useful data
+- Do NOT rely on your training knowledge — only extract endpoints you can see in the documentation below
 - Use placeholder {api_key} for the API key in URLs and headers
-- Use placeholder {account_id}, {org_id} etc. for IDs that need to be fetched first
-- If an endpoint requires fetching an ID first (e.g., project ID), include both the ID-fetching endpoint AND the data endpoint
-- Focus ONLY on GET endpoints (read-only, safe to call)
-- Include the auth header format exactly as the documentation specifies
-- If the docs mention versioned endpoints (e.g. /v9/, /v2/), use the LATEST version shown in the docs
-- You also have an http_get tool — use it ONLY if you need to fetch a specific sub-page referenced in the docs that was not included`;
+- Use placeholder {account_id}, {org_id}, {project_id} etc. for any IDs that appear in URL paths
+- If an endpoint requires fetching an ID first (e.g., project ID from a list endpoint), include BOTH the list endpoint AND the detail endpoint
+- Use the LATEST API version shown in the docs (e.g. prefer /v9/ over /v2/ if both appear)
+- Include the exact auth header format shown in the documentation
+- You also have an http_get tool — use it ONLY if you need to fetch a specific sub-page referenced in the docs that was not included
 
-  const userMessage = `Discover all monitoring-relevant API endpoints for: "${serviceId}"
+CATEGORIES (assign the best fit, used for display grouping only — do NOT use this to filter endpoints):
+- "usage": API calls, tokens, requests, bandwidth, storage consumed
+- "billing": spend, invoices, subscription, payment
+- "health": service status, uptime, degradation
+- "limits": rate limits, quotas, hard/soft limits, remaining quota
+- "account": user profile, org info, plan tier, seats, features
+- "info": anything else (list endpoints, metadata, config)`;
+
+  const userMessage = `Extract ALL GET endpoints for: "${serviceId}"
 Credentials provided: ${credentialKeys}
 (Values: ${credentialValues})
 
@@ -307,7 +313,8 @@ Credentials provided: ${credentialKeys}
 ${docResult.text.slice(0, 24_000)}
 === END OF DOCUMENTATION ===
 
-Based ONLY on the documentation above, return a JSON object in this exact format (no markdown, no explanation):
+Extract EVERY GET endpoint you can find in the documentation above.
+Return a JSON object in this exact format (no markdown, no explanation):
 {
   "serviceName": "Human readable name",
   "apiBaseUrl": "https://api.example.com",
@@ -315,14 +322,14 @@ Based ONLY on the documentation above, return a JSON object in this exact format
     {
       "url": "https://api.example.com/v1/usage",
       "method": "GET",
-      "description": "Returns current usage statistics",
+      "description": "What this endpoint returns",
       "category": "usage",
       "authHeader": "Authorization: Bearer {api_key}"
     }
   ]
 }
 
-If the documentation above is insufficient, use the http_get tool to fetch additional pages, then return the JSON.`;
+Include ALL GET endpoints — do not filter. If the documentation above is insufficient, use the http_get tool to fetch additional pages.`;
 
   // ── Step 3: Call LLM with doc content + http_get tool for follow-up ──────
   const tools = [

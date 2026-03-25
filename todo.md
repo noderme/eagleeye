@@ -62,3 +62,4 @@ The LLM discovers API endpoints automatically for any service. Users add a key â
 - [x] Domain expiry monitoring
 - [x] Mock mode for development
 - [x] QStash background scan jobs
+- [x] Fix endpoint filtering: remove pre-filter from discovery, collect ALL GET endpoints from docs, let verifyAndFetch be the real gate, cache only verified endpoints
