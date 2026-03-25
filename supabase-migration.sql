@@ -77,3 +77,20 @@ alter table provider_endpoint_maps enable row level security;
 create policy "public read endpoint maps"
   on provider_endpoint_maps for select
   using (true);
+
+-- 6. Migration: Add new columns to provider_endpoint_maps
+-- Run this if you already have the table from a previous migration
+-- These columns track documentation provenance and freshness
+
+alter table provider_endpoint_maps
+  add column if not exists docs_url text,
+  add column if not exists docs_from_search boolean default false,
+  add column if not exists last_verified_at timestamptz default now();
+
+-- Index for fast lookups by service_id (already has unique constraint, but explicit index helps)
+create index if not exists idx_provider_endpoint_maps_service_id
+  on provider_endpoint_maps(service_id);
+
+-- Index for finding stale maps (for background refresh jobs)
+create index if not exists idx_provider_endpoint_maps_updated_at
+  on provider_endpoint_maps(updated_at);

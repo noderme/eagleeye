@@ -15,6 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { LLMKey } from "./analyze";
+import { fetchApiDocs } from "./doc-fetcher";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,10 @@ export interface EndpointMap {
   endpoints: DiscoveredEndpoint[];
   discoveredAt: string;
   discoveryVersion: number;
+  /** URL where documentation was sourced from (for transparency + debugging) */
+  docsUrl?: string;
+  /** Whether docs were found via live web search (true) or LLM memory fallback (false) */
+  docsFromSearch?: boolean;
 }
 
 export interface LiveProviderData {
@@ -243,8 +248,18 @@ function resolveHeaders(
   return { [headerName]: headerValue };
 }
 
-// ── Phase 1: Discover endpoints via LLM ─────────────────────────────────────
+// ── Phase 1: Discover endpoints via live documentation fetch + LLM ───────────
 
+/**
+ * Discovers API endpoints by:
+ * 1. Fetching REAL documentation from the web (not LLM training memory)
+ * 2. Passing the actual doc text to the LLM for analysis
+ * 3. LLM extracts endpoint patterns from what it actually read
+ * 4. Returns an EndpointMap with docsUrl provenance for transparency
+ *
+ * The LLM is still given an http_get tool for any follow-up fetches it needs
+ * (e.g. fetching a specific sub-page it found referenced in the docs).
+ */
 export async function discoverEndpoints(
   serviceId: string,
   credentials: Record<string, string>,
@@ -255,6 +270,15 @@ export async function discoverEndpoints(
     .map(([k, v]) => `${k}: ${v.slice(0, 8)}...`)
     .join(", ");
 
+  // ── Step 1: Fetch real documentation BEFORE calling the LLM ─────────────
+  console.log(`[Discovery] Fetching live API documentation for: ${serviceId}`);
+  const docResult = await fetchApiDocs(serviceId, 4, 8_000);
+  console.log(
+    `[Discovery] Docs fetched: ${docResult.fetchedUrls.length} pages, ${docResult.text.length} chars, ` +
+    `fromSearch=${docResult.fromSearch}, url=${docResult.docsUrl}`
+  );
+
+  // ── Step 2: Build the LLM prompt with actual doc content ─────────────────
   const systemPrompt = `You are Eagle Eye's API discovery agent. Your job is to find ALL monitoring-relevant API endpoints for a given service.
 
 MONITORING-RELEVANT means endpoints that return any of:
@@ -264,43 +288,26 @@ MONITORING-RELEVANT means endpoints that return any of:
 - Quota/limit information (rate limits, hard limits, soft limits, remaining quota)
 - Account/organization information (plan tier, features, seats)
 
-PROCESS:
-1. Use http_get to fetch the service's API documentation (try common patterns: docs.{service}.com/api, api.{service}.com, developers.{service}.com)
-2. Read the documentation and identify ALL monitoring-relevant endpoints
-3. Return a JSON array of discovered endpoints
+You have been given REAL documentation fetched from the web. Read it carefully and extract endpoints from what you actually see — do NOT rely on your training knowledge.
 
 IMPORTANT:
 - Use placeholder {api_key} for the API key in URLs and headers
 - Use placeholder {account_id}, {org_id} etc. for IDs that need to be fetched first
 - If an endpoint requires fetching an ID first (e.g., project ID), include both the ID-fetching endpoint AND the data endpoint
 - Focus ONLY on GET endpoints (read-only, safe to call)
-- Include the auth header format exactly as the API requires it`;
-
-  const tools = [
-    {
-      name: "http_get",
-      description: "Fetch a URL and return its content. Use this to read API documentation.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: { type: "string", description: "URL to fetch" },
-          headers: { type: "object", description: "Optional HTTP headers", additionalProperties: { type: "string" } },
-        },
-        required: ["url"],
-        additionalProperties: false,
-      },
-    },
-  ];
+- Include the auth header format exactly as the documentation specifies
+- If the docs mention versioned endpoints (e.g. /v9/, /v2/), use the LATEST version shown in the docs
+- You also have an http_get tool — use it ONLY if you need to fetch a specific sub-page referenced in the docs that was not included`;
 
   const userMessage = `Discover all monitoring-relevant API endpoints for: "${serviceId}"
-
-The user has provided these credentials: ${credentialKeys}
+Credentials provided: ${credentialKeys}
 (Values: ${credentialValues})
 
-Steps:
-1. Search for the API documentation (try https://docs.${serviceId}.com/api, https://api.${serviceId}.com, https://developers.${serviceId}.com, https://${serviceId}.com/docs/api)
-2. Read the docs and find ALL endpoints related to: usage, billing, health, limits, quotas, account info
-3. Return ONLY a JSON object in this exact format (no markdown, no explanation):
+=== REAL API DOCUMENTATION (fetched live from ${docResult.docsUrl}) ===
+${docResult.text.slice(0, 24_000)}
+=== END OF DOCUMENTATION ===
+
+Based ONLY on the documentation above, return a JSON object in this exact format (no markdown, no explanation):
 {
   "serviceName": "Human readable name",
   "apiBaseUrl": "https://api.example.com",
@@ -313,9 +320,26 @@ Steps:
       "authHeader": "Authorization: Bearer {api_key}"
     }
   ]
-}`;
+}
 
-  const fetchedDocs: Record<string, string> = {};
+If the documentation above is insufficient, use the http_get tool to fetch additional pages, then return the JSON.`;
+
+  // ── Step 3: Call LLM with doc content + http_get tool for follow-up ──────
+  const tools = [
+    {
+      name: "http_get",
+      description: "Fetch a URL and return its content. Use ONLY for additional doc pages not already provided above.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "URL to fetch" },
+          headers: { type: "object", description: "Optional HTTP headers", additionalProperties: { type: "string" } },
+        },
+        required: ["url"],
+        additionalProperties: false,
+      },
+    },
+  ];
 
   const result = await callLLMWithTools(
     systemPrompt,
@@ -325,25 +349,25 @@ Steps:
     async (name, input) => {
       if (name === "http_get") {
         try {
-          const res = await fetchWithTimeout(input.url, { headers: input.headers ?? {} }, 8000);
-          const text = await res.text();
-          fetchedDocs[input.url] = text.slice(0, 3000);
-          return text.slice(0, 8000);
+          const res = await fetchWithTimeout(input.url, { headers: input.headers ?? {} }, 10_000);
+          const html = await res.text();
+          // Strip HTML before returning to LLM so it reads clean text
+          const { htmlToText } = await import("./doc-fetcher");
+          return htmlToText(html).slice(0, 8_000);
         } catch (e) {
           return `Error fetching ${input.url}: ${String(e)}`;
         }
       }
       return "Unknown tool";
     },
-    12
+    8 // Fewer turns needed since we already provide the docs
   );
 
-  // Parse the JSON response
+  // ── Step 4: Parse LLM response ────────────────────────────────────────────
   try {
     const jsonMatch = result.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON found in response");
     const parsed = JSON.parse(jsonMatch[0]);
-
     return {
       serviceId,
       serviceName: parsed.serviceName || serviceId,
@@ -357,17 +381,22 @@ Steps:
         verified: false,
       })),
       discoveredAt: new Date().toISOString(),
-      discoveryVersion: 1,
+      discoveryVersion: 2, // Bump version — now using live docs
+      docsUrl: docResult.docsUrl,
+      docsFromSearch: docResult.fromSearch,
     };
   } catch {
     // Fallback: return empty map if LLM failed to produce valid JSON
+    console.warn(`[Discovery] LLM failed to produce valid JSON for ${serviceId}`);
     return {
       serviceId,
       serviceName: serviceId,
       apiBaseUrl: `https://api.${serviceId}.com`,
       endpoints: [],
       discoveredAt: new Date().toISOString(),
-      discoveryVersion: 1,
+      discoveryVersion: 2,
+      docsUrl: docResult.docsUrl,
+      docsFromSearch: docResult.fromSearch,
     };
   }
 }

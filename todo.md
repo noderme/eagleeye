@@ -11,7 +11,11 @@ The LLM discovers API endpoints automatically for any service. Users add a key â
 - [x] Endpoint verification layer: call every discovered endpoint with user's key, keep only those that return 200 + real data
 - [x] Save verified endpoint map to database per provider (reuse for all future users of same service) â€” `lib/endpoint-store.ts`
 - [x] Community sharing via `provider_endpoint_maps` table â€” once one user discovers a service, all users benefit
-- [ ] Add web search tool to discovery agent so it reads actual live API documentation (currently uses LLM training knowledge)
+- [x] Add web search tool to discovery agent so it reads actual live API documentation (currently uses LLM training knowledge)
+- [x] Add HTML-to-text stripper so LLM reads clean readable docs, not raw HTML
+- [x] Add multi-page doc crawl: follow relevant links (e.g. /reference, /api, /endpoints)
+- [x] Add last_verified_at to provider_endpoint_maps table + auto-refresh after 30 days
+- [x] Add docs_url field to endpoint map so we know where endpoints were sourced from
 
 ## Phase 2 â€” Failure Detection
 - [x] Loud credential failure alerts: 401/403 responses trigger `_credentialError` flag + red banner on dashboard
@@ -43,7 +47,7 @@ The LLM discovers API endpoints automatically for any service. Users add a key â
 - [ ] Test dynamic discovery with at least one unknown provider (e.g., PlanetScale, Neon)
 - [ ] Test Ollama local flow
 - [ ] Add `pom.xml` and `build.gradle` to `detect.ts` for Java/Maven support
-- [ ] Add web search capability to discovery agent (currently uses LLM training knowledge only)
+- [x] Add web search capability to discovery agent (live docs fetching implemented)
 - [ ] HN launch post preparation
 
 ---
