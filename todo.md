@@ -63,3 +63,9 @@ The LLM discovers API endpoints automatically for any service. Users add a key �
 - [x] Mock mode for development
 - [x] QStash background scan jobs
 - [x] Fix endpoint filtering: remove pre-filter from discovery, collect ALL GET endpoints from docs, let verifyAndFetch be the real gate, cache only verified endpoints
+- [x] Fix Vercel credential key name mismatch: stored as 'key' but fetchVercel expects 'apiToken'
+- [x] Fix Vercel /v2/teams 403 false positive: hobby users get 403 on teams endpoint even with valid token — should not show 'key expired'
+- [x] Enrich DiscoveredEndpoint with queryParams, body, headers map, extractFrom, dependsOn so LLM stores full call spec
+- [x] Update discovery prompt to extract all call parameters (query params, body, headers, dependencies) from docs
+- [x] Update verifyAndFetch to resolve and send queryParams, body, and all headers uniformly — no per-service code
+- [x] Fix Vercel credential key name mismatch: stored as 'key' but KNOWN_FETCHERS passes c.apiToken

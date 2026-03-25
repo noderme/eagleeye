@@ -44,15 +44,72 @@ export interface ProviderSummaryItem {
   alert?: "warn" | "critical"; // Optional alert level for this specific item
 }
 
+/**
+ * A complete, open-ended call specification for one API endpoint.
+ *
+ * The LLM reads the docs and produces whatever this API actually needs:
+ * any headers, any query params, any body shape, any auth scheme.
+ * We store it verbatim and execute it generically — no per-service code anywhere.
+ *
+ * All string values (in headers, params, body) may contain {placeholder} tokens
+ * that are resolved at call time from the user’s credentials or from IDs
+ * extracted from earlier responses in the same scan.
+ */
 export interface DiscoveredEndpoint {
-  url: string;                  // Full URL with placeholders like {account_id}
-  method: "GET" | "POST";
-  description: string;          // What this endpoint tells us
-  category: "usage" | "billing" | "health" | "limits" | "quotas" | "info";
-  authHeader: string;           // e.g. "Authorization: Bearer {api_key}"
-  verified: boolean;            // Did it return real data?
-  lastStatus?: number;          // Last HTTP status code
-  lastResponseSnippet?: string; // First 500 chars of last response
+  // ── Identity ──────────────────────────────────────────────────────────────────────────────────
+  url: string;         // Full URL with {placeholder} tokens, e.g. https://api.x.com/v1/orgs/{org_id}/usage
+  method: string;      // HTTP method: GET, POST, PUT, PATCH, DELETE
+  description: string; // What this endpoint returns / what it’s useful for
+  category: string;    // usage | billing | health | limits | account | info | any other label
+
+  // ── Complete call spec (LLM fills this from docs) ─────────────────────────────────────────────
+  /**
+   * ALL request headers. Values may contain {placeholders}.
+   * The LLM includes every header the API requires: auth, content-type, versioning, etc.
+   * e.g. { "Authorization": "Bearer {key}", "X-API-Version": "2024-01", "Stripe-Version": "2023-10-16" }
+   */
+  headers: Record<string, string>;
+
+  /**
+   * Query parameters to append to the URL. Values may contain {placeholders}.
+   * The LLM includes every param the API requires or recommends for useful output.
+   * e.g. { "start_time": "{month_start_unix}", "granularity": "day", "limit": "100", "expand[]": "data.balance_transaction" }
+   */
+  queryParams?: Record<string, string>;
+
+  /**
+   * Request body for POST/PUT/PATCH. Values may contain {placeholders}.
+   * e.g. { "query": "{ viewer { login } }", "variables": {} }
+   */
+  body?: Record<string, any>;
+
+  /**
+   * Any additional call-level config the LLM wants to express.
+   * Open-ended — the executor iterates over known keys and ignores unknown ones.
+   * e.g. { "timeout": 15000, "followRedirects": false, "responseType": "text" }
+   */
+  callConfig?: Record<string, any>;
+
+  /**
+   * Dependency chain: list of URLs (with {placeholders}) that must be called
+   * before this endpoint, in order, to resolve IDs this endpoint needs.
+   * e.g. ["https://api.x.com/v1/orgs"] → extracts org_id → used in this endpoint’s URL
+   */
+  dependsOn?: string[];
+
+  /**
+   * How to extract values from THIS endpoint’s response for use in later calls.
+   * path uses dot-notation + array index: "orgs[0].id", "data.subscription.id"
+   * e.g. [{ path: "teams[0].id", storeAs: "team_id" }, { path: "user.id", storeAs: "user_id" }]
+   */
+  extractFrom?: Array<{ path: string; storeAs: string }>;
+
+  // ── Runtime state (set by verifyAndFetch, not by LLM) ────────────────────────────────────────────
+  /** @deprecated kept for backward compat with v1/v2 cached maps that used a single authHeader string */
+  authHeader?: string;
+  verified: boolean;
+  lastStatus?: number;
+  lastResponseSnippet?: string;
 }
 
 export interface EndpointMap {
@@ -221,31 +278,79 @@ function isQuotaError(status: number, body: string): boolean {
 
 // ── Resolve credential placeholders ─────────────────────────────────────────
 
-function resolveUrl(urlTemplate: string, credentials: Record<string, string>): string {
-  let url = urlTemplate;
-  for (const [key, value] of Object.entries(credentials)) {
-    url = url.replace(new RegExp(`\\{${key}\\}`, "g"), value);
-    url = url.replace(new RegExp(`\\{${key.toUpperCase()}\\}`, "g"), value);
+/**
+ * Resolve all {placeholder} tokens in a string using the resolved ID store.
+ * Handles both {key} and {KEY} (case-insensitive match).
+ */
+function resolvePlaceholders(template: string, store: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(store)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, "g"), String(value));
+    result = result.replace(new RegExp(`\\{${key.toUpperCase()}\\}`, "g"), String(value));
   }
-  return url;
+  return result;
 }
 
-function resolveHeaders(
-  authHeaderTemplate: string,
-  credentials: Record<string, string>
-): Record<string, string> {
-  let header = authHeaderTemplate;
-  for (const [key, value] of Object.entries(credentials)) {
-    header = header.replace(new RegExp(`\\{${key}\\}`, "g"), value);
-    header = header.replace(new RegExp(`\\{${key.toUpperCase()}\\}`, "g"), value);
+/**
+ * Recursively resolve all {placeholder} tokens in any value —
+ * works on strings, arrays, and nested objects.
+ */
+function resolveDeep(val: any, store: Record<string, string>): any {
+  if (typeof val === "string") return resolvePlaceholders(val, store);
+  if (Array.isArray(val)) return val.map(v => resolveDeep(v, store));
+  if (val && typeof val === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val)) out[k] = resolveDeep(v, store);
+    return out;
   }
+  return val;
+}
 
-  // Parse "Header-Name: value" format
-  const colonIdx = header.indexOf(":");
-  if (colonIdx === -1) return { Authorization: header };
-  const headerName = header.slice(0, colonIdx).trim();
-  const headerValue = header.slice(colonIdx + 1).trim();
-  return { [headerName]: headerValue };
+/**
+ * Build resolved headers for a call.
+ * Supports both the new `headers` map and the legacy `authHeader` string.
+ */
+function buildHeaders(endpoint: DiscoveredEndpoint, store: Record<string, string>): Record<string, string> {
+  // New format: headers is a map
+  if (endpoint.headers && Object.keys(endpoint.headers).length > 0) {
+    return resolveDeep(endpoint.headers, store) as Record<string, string>;
+  }
+  // Legacy format: single authHeader string like "Authorization: Bearer {api_key}"
+  if (endpoint.authHeader) {
+    const resolved = resolvePlaceholders(endpoint.authHeader, store);
+    const colonIdx = resolved.indexOf(":");
+    if (colonIdx === -1) return { Authorization: resolved };
+    return { [resolved.slice(0, colonIdx).trim()]: resolved.slice(colonIdx + 1).trim() };
+  }
+  return {};
+}
+
+/**
+ * Append resolved query params to a URL string.
+ */
+function appendQueryParams(url: string, params: Record<string, string> | undefined, store: Record<string, string>): string {
+  if (!params || Object.keys(params).length === 0) return url;
+  const resolved = resolveDeep(params, store) as Record<string, string>;
+  const qs = Object.entries(resolved)
+    .filter(([, v]) => v !== undefined && v !== null && !String(v).includes("{"))
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join("&");
+  if (!qs) return url;
+  return url.includes("?") ? `${url}&${qs}` : `${url}?${qs}`;
+}
+
+/**
+ * Extract a value from a response object using dot-notation + array index path.
+ * e.g. "teams[0].id" or "data.subscription.plan"
+ */
+function extractByPath(obj: any, path: string): string | undefined {
+  const parts = path.replace(/\[(\d+)\]/g, ".$1").split(".");
+  let cur = obj;
+  for (const part of parts) {
+    if (cur == null) return undefined;
+    cur = cur[part];
+  }
+  return cur != null ? String(cur) : undefined;
 }
 
 // ── Phase 1: Discover endpoints via live documentation fetch + LLM ───────────
@@ -284,20 +389,27 @@ export async function discoverEndpoints(
   // with real credentials and only keeps those that return actual data.
   // Pre-filtering by "monitoring-relevant" caused us to miss endpoints and rely on
   // LLM judgment about what MIGHT be useful before we even know what the endpoint returns.
-  const systemPrompt = `You are Eagle Eye's API discovery agent. Your job is to extract ALL GET endpoints from the provided API documentation.
+  const systemPrompt = `You are Eagle Eye's API discovery agent. Your job is to produce a complete, executable call specification for every endpoint in the provided API documentation.
+
+CORE PRINCIPLE: You are building a generic API executor. You must store EVERYTHING the API needs to make a successful call — no assumptions, no defaults, no shortcuts. The executor will use exactly what you provide and nothing else.
 
 RULES:
-- Extract EVERY GET endpoint you find in the documentation — do not pre-filter or skip any
-- We will call each endpoint with real credentials to discover which ones return useful data
+- Extract EVERY endpoint you find in the documentation — do not pre-filter or skip any
 - Do NOT rely on your training knowledge — only extract endpoints you can see in the documentation below
-- Use placeholder {api_key} for the API key in URLs and headers
-- Use placeholder {account_id}, {org_id}, {project_id} etc. for any IDs that appear in URL paths
-- If an endpoint requires fetching an ID first (e.g., project ID from a list endpoint), include BOTH the list endpoint AND the detail endpoint
-- Use the LATEST API version shown in the docs (e.g. prefer /v9/ over /v2/ if both appear)
-- Include the exact auth header format shown in the documentation
-- You also have an http_get tool — use it ONLY if you need to fetch a specific sub-page referenced in the docs that was not included
+- For EACH endpoint, capture the COMPLETE call specification:
+  * headers: ALL required headers (auth, content-type, API version headers, custom headers — whatever the API requires)
+  * queryParams: ALL query parameters the API requires or recommends for useful output (date ranges, pagination, granularity, expand fields, filters, etc.)
+  * body: request body for POST/PUT/PATCH endpoints
+  * extractFrom: if this endpoint returns IDs needed by other endpoints, specify exactly how to extract them
+  * dependsOn: list URLs of endpoints that must be called first to resolve IDs this endpoint needs
+- Use {placeholder} tokens for any value that comes from credentials or a prior response:
+  * Credential fields: use the EXACT field name from the credentials object (e.g. {key}, {apiToken}, {accountSid})
+  * IDs from prior responses: use descriptive names like {org_id}, {team_id}, {project_id}, {account_id}
+  * Computed values: use {month_start_unix} for start of current month as Unix timestamp, {today_iso} for today as ISO date
+- Use the LATEST API version shown in the docs
+- You also have an http_get tool — use it ONLY if you need to fetch a specific sub-page referenced in the docs
 
-CATEGORIES (assign the best fit, used for display grouping only — do NOT use this to filter endpoints):
+CATEGORIES (for display grouping only — do NOT use to filter):
 - "usage": API calls, tokens, requests, bandwidth, storage consumed
 - "billing": spend, invoices, subscription, payment
 - "health": service status, uptime, degradation
@@ -305,31 +417,50 @@ CATEGORIES (assign the best fit, used for display grouping only — do NOT use t
 - "account": user profile, org info, plan tier, seats, features
 - "info": anything else (list endpoints, metadata, config)`;
 
-  const userMessage = `Extract ALL GET endpoints for: "${serviceId}"
-Credentials provided: ${credentialKeys}
-(Values: ${credentialValues})
+  const userMessage = `Produce complete call specifications for ALL endpoints of: "${serviceId}"
+
+Credentials available (field names you can use as {placeholders}):
+${Object.entries(credentials).map(([k, v]) => `  ${k}: ${v.slice(0, 6)}... (use as {${k}})`).join("\n")}
 
 === REAL API DOCUMENTATION (fetched live from ${docResult.docsUrl}) ===
 ${docResult.text.slice(0, 24_000)}
 === END OF DOCUMENTATION ===
 
-Extract EVERY GET endpoint you can find in the documentation above.
-Return a JSON object in this exact format (no markdown, no explanation):
+For each endpoint, produce a COMPLETE call spec. Include every header, every required query param, every body field.
+Return a JSON object (no markdown, no explanation):
 {
   "serviceName": "Human readable name",
   "apiBaseUrl": "https://api.example.com",
   "endpoints": [
     {
-      "url": "https://api.example.com/v1/usage",
+      "url": "https://api.example.com/v1/usage/{org_id}",
       "method": "GET",
-      "description": "What this endpoint returns",
+      "description": "Monthly API usage broken down by day",
       "category": "usage",
-      "authHeader": "Authorization: Bearer {api_key}"
+      "headers": {
+        "Authorization": "Bearer {key}",
+        "X-API-Version": "2024-01"
+      },
+      "queryParams": {
+        "start_time": "{month_start_unix}",
+        "granularity": "day",
+        "limit": "100"
+      },
+      "dependsOn": ["https://api.example.com/v1/orgs"],
+      "extractFrom": [
+        { "path": "orgs[0].id", "storeAs": "org_id" }
+      ]
     }
   ]
 }
 
-Include ALL GET endpoints — do not filter. If the documentation above is insufficient, use the http_get tool to fetch additional pages.`;
+IMPORTANT:
+- Every endpoint needs a complete headers object — never omit auth
+- Include queryParams whenever the API accepts date ranges, pagination, filters, or expansion fields
+- If the docs show an endpoint needs an ID from another endpoint, use dependsOn + extractFrom
+- Use {month_start_unix} for Unix timestamp of start of current month where APIs need date ranges
+- Use {today_iso} for today\'s date in ISO format where APIs need date strings
+- If the documentation above is insufficient, use the http_get tool to fetch additional pages`;
 
   // ── Step 3: Call LLM with doc content + http_get tool for follow-up ──────
   const tools = [
@@ -384,11 +515,19 @@ Include ALL GET endpoints — do not filter. If the documentation above is insuf
         method: e.method || "GET",
         description: e.description || "",
         category: e.category || "info",
-        authHeader: e.authHeader || "Authorization: Bearer {api_key}",
+        // Full open call spec — whatever the LLM extracted from docs
+        headers: e.headers || {},
+        queryParams: e.queryParams,
+        body: e.body,
+        callConfig: e.callConfig,
+        dependsOn: e.dependsOn,
+        extractFrom: e.extractFrom,
+        // Legacy compat: keep authHeader if headers map is empty
+        authHeader: (!e.headers || Object.keys(e.headers).length === 0) ? (e.authHeader || "") : undefined,
         verified: false,
       })),
       discoveredAt: new Date().toISOString(),
-      discoveryVersion: 2, // Bump version — now using live docs
+      discoveryVersion: 3, // v3: open call spec with full params/headers/body
       docsUrl: docResult.docsUrl,
       docsFromSearch: docResult.fromSearch,
     };
@@ -401,7 +540,7 @@ Include ALL GET endpoints — do not filter. If the documentation above is insuf
       apiBaseUrl: `https://api.${serviceId}.com`,
       endpoints: [],
       discoveredAt: new Date().toISOString(),
-      discoveryVersion: 2,
+      discoveryVersion: 3,
       docsUrl: docResult.docsUrl,
       docsFromSearch: docResult.fromSearch,
     };
@@ -421,21 +560,33 @@ export async function verifyAndFetch(
   // We need to resolve IDs like {project_id} by fetching parent endpoints first
   const resolvedIds: Record<string, string> = { ...credentials };
 
-  // Sort: endpoints without unresolved placeholders first
+  // Inject computed placeholders that many APIs need
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  resolvedIds["month_start_unix"] = String(Math.floor(monthStart.getTime() / 1000));
+  resolvedIds["month_start_ms"] = String(monthStart.getTime());
+  resolvedIds["month_start_iso"] = monthStart.toISOString().slice(0, 10);
+  resolvedIds["today_iso"] = now.toISOString().slice(0, 10);
+  resolvedIds["today_unix"] = String(Math.floor(now.getTime() / 1000));
+  resolvedIds["year"] = String(now.getFullYear());
+  resolvedIds["month"] = String(now.getMonth() + 1).padStart(2, "0");
+
+  // Sort: endpoints with no unresolved URL placeholders first (dependency ordering)
+  // Endpoints that depend on IDs from other endpoints go last
   const sorted = [...endpointMap.endpoints].sort((a, b) => {
-    const aUnresolved = (a.url.match(/\{[^}]+\}/g) || []).filter(p => !credentials[p.slice(1, -1)]).length;
-    const bUnresolved = (b.url.match(/\{[^}]+\}/g) || []).filter(p => !credentials[p.slice(1, -1)]).length;
-    return aUnresolved - bUnresolved;
+    const countUnresolved = (ep: DiscoveredEndpoint) =>
+      (ep.url.match(/\{[^}]+\}/g) || []).filter(p => !resolvedIds[p.slice(1, -1)]).length;
+    return countUnresolved(a) - countUnresolved(b);
   });
 
   let credentialErrorDetected = false;
   let credentialErrorMessage = "";
 
   for (const endpoint of sorted) {
-    const resolvedUrl = resolveUrl(endpoint.url, resolvedIds);
-    const headers = resolveHeaders(endpoint.authHeader, resolvedIds);
+    // Resolve URL placeholders
+    const resolvedUrl = resolvePlaceholders(endpoint.url, resolvedIds);
 
-    // Skip if URL still has unresolved placeholders
+    // Skip if URL still has unresolved placeholders after all resolution attempts
     if (resolvedUrl.includes("{") && resolvedUrl.includes("}")) {
       results.push({
         url: endpoint.url,
@@ -444,15 +595,35 @@ export async function verifyAndFetch(
         status: 0,
         ok: false,
         data: null,
-        error: "Unresolved URL placeholder — missing credential",
+        error: `Unresolved placeholder in URL: ${resolvedUrl.match(/\{[^}]+\}/g)?.join(", ")}`,
       });
       continue;
     }
 
+    // Build full URL with resolved query params
+    const finalUrl = appendQueryParams(resolvedUrl, endpoint.queryParams, resolvedIds);
+
+    // Build headers from the open call spec (supports both new map format and legacy string)
+    const headers = buildHeaders(endpoint, resolvedIds);
+
+    // Build request init
+    const init: RequestInit = { headers };
+    if (endpoint.method && endpoint.method !== "GET" && endpoint.body) {
+      const resolvedBody = resolveDeep(endpoint.body, resolvedIds);
+      init.body = JSON.stringify(resolvedBody);
+      if (!headers["Content-Type"] && !headers["content-type"]) {
+        (headers as any)["Content-Type"] = "application/json";
+      }
+    }
+    init.method = endpoint.method || "GET";
+
+    // Respect callConfig timeout if specified
+    const timeout = endpoint.callConfig?.timeout ?? 12_000;
+
     try {
-      const res = await fetchWithTimeout(resolvedUrl, { headers }, 10_000);
+      const res = await fetchWithTimeout(finalUrl, init, timeout);
       const body = await res.text();
-      rawBodies[resolvedUrl] = body.slice(0, 2000);
+      rawBodies[finalUrl] = body.slice(0, 2000);
 
       let data: any = null;
       try { data = JSON.parse(body); } catch { data = body.slice(0, 500); }
@@ -469,13 +640,24 @@ export async function verifyAndFetch(
           : `Authentication failed for ${endpointMap.serviceName}: ${body.slice(0, 200)}`;
       }
 
-      // Extract IDs from successful responses for use in subsequent calls
+      // Extract IDs from successful responses using explicit extractFrom spec
       if (res.ok && data && typeof data === "object") {
+        // Use LLM-specified extraction paths first
+        if (endpoint.extractFrom && endpoint.extractFrom.length > 0) {
+          for (const { path, storeAs } of endpoint.extractFrom) {
+            const extracted = extractByPath(data, path);
+            if (extracted && !resolvedIds[storeAs]) {
+              resolvedIds[storeAs] = extracted;
+              console.log(`[Discovery] Extracted ${storeAs}=${extracted} from ${finalUrl}`);
+            }
+          }
+        }
+        // Also run the generic heuristic extractor as a fallback
         extractAndStoreIds(data, resolvedIds, endpointMap.serviceId);
       }
 
       results.push({
-        url: resolvedUrl,
+        url: finalUrl,
         description: endpoint.description,
         category: endpoint.category,
         status: res.status,
@@ -492,7 +674,7 @@ export async function verifyAndFetch(
 
     } catch (e) {
       results.push({
-        url: resolvedUrl,
+        url: finalUrl,
         description: endpoint.description,
         category: endpoint.category,
         status: 0,

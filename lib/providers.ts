@@ -124,27 +124,64 @@ export async function fetchStripe(apiKey: string) {
 }
 
 export async function fetchVercel(apiToken: string) {
+  // Guard: empty token means the credential field was mismatched — fail clearly
+  if (!apiToken || apiToken === "undefined") {
+    return {
+      provider: "vercel",
+      error: "No API token provided — check your Vercel integration on the Integrations page.",
+      _summary: "Vercel — no token",
+      _signal: "No API token found. Re-add your Vercel token on the Integrations page.",
+      _status: "warn",
+    };
+  }
+
   const headers = { Authorization: `Bearer ${apiToken}` };
 
-  const [teamsRes, projectsRes] = await Promise.all([
-    fetchTimeout("https://api.vercel.com/v2/teams", { headers }),
+  // Fetch user info first — works for both hobby and team accounts
+  // /v2/teams returns 403 for hobby users even with a valid token (not a credential error)
+  const [userRes, projectsRes] = await Promise.all([
+    fetchTimeout("https://api.vercel.com/v2/user", { headers }),
     fetchTimeout("https://api.vercel.com/v9/projects?limit=20", { headers }),
   ]);
 
-  const teamsData = teamsRes.ok ? await teamsRes.json() : null;
+  // A 401 on /v2/user is a real credential error — token is invalid
+  if (!userRes.ok && userRes.status === 401) {
+    return {
+      provider: "vercel",
+      error: "Invalid API token — the token was rejected by Vercel (HTTP 401).",
+      _credentialError: true,
+      _credentialMessage: "Vercel API token is invalid or revoked. Rotate it on the Integrations page.",
+      _summary: "Vercel — invalid token",
+      _signal: "API token rejected by Vercel. Create a new token in Vercel → Settings → Tokens.",
+      _status: "warn",
+    };
+  }
+
+  const userData = userRes.ok ? await userRes.json() : null;
   const projectsData = projectsRes.ok ? await projectsRes.json() : null;
+
+  // Try teams endpoint separately — 403 here just means hobby plan, not a bad token
+  const teamsRes = await fetchTimeout("https://api.vercel.com/v2/teams", { headers });
+  const teamsData = teamsRes.ok ? await teamsRes.json() : null;
   const team = teamsData?.teams?.[0] ?? null;
 
-  const plan = team?.subscription?.plan ?? "hobby";
+  // Determine plan: team subscription > user billing plan > hobby default
+  const userBillingPlan = userData?.user?.billingPeriod ?? null;
+  const plan = team?.subscription?.plan ?? (userBillingPlan ? "pro" : "hobby");
   const projectCount = projectsData?.projects?.length ?? 0;
+  const username = userData?.user?.username ?? userData?.user?.name ?? null;
   const hobbyOverLimit = plan === "hobby" && projectCount > 3;
+
   return {
     provider: "vercel",
     plan,
-    teamName: team?.name ?? null,
+    teamName: team?.name ?? username,
+    username,
     projectCount,
     _summary: `${plan} · ${projectCount} project${projectCount !== 1 ? "s" : ""}`,
-    _signal: hobbyOverLimit ? "Hobby plan has limits — consider upgrading to Pro." : "Plan looks appropriate for current usage.",
+    _signal: hobbyOverLimit
+      ? "Hobby plan has limits — consider upgrading to Pro."
+      : `${projectCount} project${projectCount !== 1 ? "s" : ""} on ${plan} plan.`,
     _status: hobbyOverLimit ? "upgrade" : "good",
     projects: (projectsData?.projects ?? []).slice(0, 10).map((p: any) => ({
       name: p.name,
@@ -154,7 +191,8 @@ export async function fetchVercel(apiToken: string) {
     billingPeriodEnd: team?.subscription?.period?.end
       ? new Date(team.subscription.period.end * 1000).toISOString()
       : null,
-    error: !teamsRes.ok ? `HTTP ${teamsRes.status}` : null,
+    // Only set error if projects also failed — teams 403 alone is not an error
+    error: (!userRes.ok && !projectsRes.ok) ? `HTTP ${userRes.status}` : null,
   };
 }
 
@@ -418,7 +456,8 @@ export async function fetchWithClaude(
 export const KNOWN_FETCHERS: Record<string, (creds: any) => Promise<any>> = {
   openai: (c: { apiKey: string }) => fetchOpenAI(c.apiKey),
   stripe: (c: { apiKey: string }) => fetchStripe(c.apiKey),
-  vercel: (c: { apiToken: string }) => fetchVercel(c.apiToken),
+  // Vercel integrations form stores the key as 'key' — accept both field names
+  vercel: (c: { key?: string; apiToken?: string }) => fetchVercel((c.key ?? c.apiToken) as string),
   resend: (c: { apiKey: string }) => fetchResend(c.apiKey),
   twilio: (c: { accountSid: string; authToken: string }) => fetchTwilio(c.accountSid, c.authToken),
   supabase: (c: { accessToken: string }) => fetchSupabase(c.accessToken),
