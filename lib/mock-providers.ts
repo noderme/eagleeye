@@ -13,6 +13,33 @@ export const mockOpenAI = {
   _summary: "pay-as-you-go · $45.67/mo",
   _signal: "At 46% of hard limit — usage is healthy.",
   _status: "good",
+  _providerSummary: {
+    serviceId: "openai",
+    serviceName: "OpenAI",
+    status: "good",
+    lastUpdated: new Date().toISOString(),
+    groups: [
+      {
+        category: "billing",
+        label: "Billing",
+        items: [
+          { key: "Monthly Spend", value: "$45.67" },
+          { key: "Hard Limit", value: "$100.00" },
+          { key: "Quota Used", value: "46%" },
+          { key: "Plan", value: "Pay-as-you-go" },
+        ],
+      },
+      {
+        category: "usage",
+        label: "Usage",
+        items: [
+          { key: "GPT-5.4 Cost", value: "$35.00" },
+          { key: "GPT-5.4-mini Cost", value: "$10.67" },
+          { key: "Total Tokens", value: "1.05M" },
+        ],
+      },
+    ],
+  },
   models: [
     {
       id: "gpt-5.4",
@@ -80,6 +107,24 @@ export const mockStripe = {
   _summary: "3 active subs · MRR $1,299.99",
   _signal: "Available balance: $5,234.56.",
   _status: "good",
+  _providerSummary: {
+    serviceId: "stripe",
+    serviceName: "Stripe",
+    status: "good",
+    lastUpdated: new Date().toISOString(),
+    groups: [
+      {
+        category: "billing",
+        label: "Revenue",
+        items: [
+          { key: "MRR", value: "$1,299.99" },
+          { key: "Active Subscriptions", value: "3" },
+          { key: "Available Balance", value: "$5,234.56" },
+          { key: "Pending Balance", value: "$1,500.00" },
+        ],
+      },
+    ],
+  },
   subscriptions: [
     {
       id: "sub_xxxxxxxxxxxxxxxxxxxx",
@@ -237,12 +282,34 @@ export const mockSupabase = {
       },
     },
   },
-  _summary: "2 projects · free plan",
+   _summary: "2 projects · free plan",
   _signal: "staging-api: Database size at 84% of free limit.",
   _status: "warn",
+  _providerSummary: {
+    serviceId: "supabase",
+    serviceName: "Supabase",
+    status: "warn",
+    lastUpdated: new Date().toISOString(),
+    groups: [
+      {
+        category: "account",
+        label: "Account",
+        items: [
+          { key: "Plan", value: "Free" },
+          { key: "Projects", value: "2" },
+        ],
+      },
+      {
+        category: "warnings",
+        label: "Warnings",
+        items: [
+          { key: "staging-api DB Size", value: "84% used", alert: "warn" },
+        ],
+      },
+    ],
+  },
   error: null,
 };
-
 export const mockGitHub = {
   provider: "github",
   user: {
@@ -389,6 +456,31 @@ export const mockAnthropic = {
   _summary: "API key active",
   _signal: "Key is valid. No billing API — track expiry on Key Hygiene page.",
   _status: "good",
+  _providerSummary: {
+    serviceId: "anthropic",
+    serviceName: "Anthropic",
+    status: "good",
+    lastUpdated: new Date().toISOString(),
+    groups: [
+      {
+        category: "account",
+        label: "Account",
+        items: [
+          { key: "Key Status", value: "Active" },
+          { key: "Monthly Spend", value: "$12.50" },
+          { key: "Spend Limit", value: "$50.00" },
+        ],
+      },
+      {
+        category: "usage",
+        label: "Usage",
+        items: [
+          { key: "Claude Opus Cost", value: "$10.00" },
+          { key: "Claude Sonnet Cost", value: "$2.50" },
+        ],
+      },
+    ],
+  },
   models: [
     {
       id: "claude-opus-4-6",
@@ -504,99 +596,92 @@ export const mockVercel = {
   _summary: "pro · 5 projects",
   _signal: "Plan looks appropriate for current usage.",
   _status: "good",
-  projects: [
-    {
-      name: "my-app",
-      framework: "nextjs",
-      lastDeployed: "2024-03-22T10:15:00Z",
-    },
-    {
-      name: "api-server",
-      framework: "nodejs",
-      lastDeployed: "2024-03-21T14:30:00Z",
-    },
-    {
-      name: "landing-page",
-      framework: "nextjs",
-      lastDeployed: "2024-03-20T09:45:00Z",
-    },
-    {
-      name: "docs",
-      framework: "nextjs",
-      lastDeployed: "2024-03-19T16:20:00Z",
-    },
-    {
-      name: "dashboard",
-      framework: "react",
-      lastDeployed: "2024-03-18T11:00:00Z",
-    },
-  ],
-  billingPeriodEnd: "2026-04-22T00:00:00Z",
+  _providerSummary: {
+    serviceId: "vercel",
+    serviceName: "Vercel",
+    status: "good",
+    lastUpdated: new Date().toISOString(),
+    groups: [
+      {
+        category: "billing",
+        label: "Billing",
+        items: [
+          { key: "Included Credit Used", value: "$5.79 / $20", alert: undefined },
+          { key: "On-Demand Charges", value: "$0.00" },
+          { key: "Cycle Days Remaining", value: "25 days" },
+          { key: "Build Minutes", value: "$5.17" },
+          { key: "Function Invocations", value: "$0.60" },
+          { key: "Fluid Provisioned Memory", value: "$0.02" },
+          { key: "Fluid Active CPU", value: "$0.01" },
+        ],
+      },
+      {
+        category: "account",
+        label: "Account",
+        items: [
+          { key: "Plan", value: "Pro" },
+          { key: "Team", value: "My Team" },
+          { key: "Projects", value: "5" },
+        ],
+      },
+    ],
+  },
   error: null,
 };
 
 export const mockResend = {
   provider: "resend",
   domainCount: 2,
-  domains: [
-    {
-      name: "mail.example.com",
-      status: "verified",
-      region: "us-east-1",
-      createdAt: "2024-01-15T10:00:00Z",
-    },
-    {
-      name: "noreply.example.com",
-      status: "verified",
-      region: "us-east-1",
-      createdAt: "2024-02-20T14:30:00Z",
-    },
-  ],
   _summary: "2 domains · 2 verified",
   _signal: "2 domains verified and ready to send.",
   _status: "good",
+  _providerSummary: {
+    serviceId: "resend",
+    serviceName: "Resend",
+    status: "good",
+    lastUpdated: new Date().toISOString(),
+    groups: [
+      {
+        category: "account",
+        label: "Account",
+        items: [
+          { key: "Domains", value: "2" },
+          { key: "Verified Domains", value: "2" },
+          { key: "Plan", value: "Free" },
+        ],
+      },
+    ],
+  },
   error: null,
 };
 
 export const mockTwilio = {
   provider: "twilio",
   accountStatus: "active",
-  friendlyName: "My Twilio Account",
   type: "Trial",
   balance: "15.50",
   phoneNumberCount: 3,
-  phoneNumbers: [
-    {
-      friendlyName: "Main Number",
-      phoneNumber: "+1234567890",
-      capabilities: {
-        voice: true,
-        sms: true,
-        mms: true,
-      },
-    },
-    {
-      friendlyName: "Support Line",
-      phoneNumber: "+1234567891",
-      capabilities: {
-        voice: true,
-        sms: true,
-        mms: false,
-      },
-    },
-    {
-      friendlyName: "SMS Only",
-      phoneNumber: "+1234567892",
-      capabilities: {
-        voice: false,
-        sms: true,
-        mms: true,
-      },
-    },
-  ],
   _summary: "Trial · 3 numbers",
   _signal: "Balance $15.50 — looks healthy.",
   _status: "good",
+  _providerSummary: {
+    serviceId: "twilio",
+    serviceName: "Twilio",
+    status: "good",
+    lastUpdated: new Date().toISOString(),
+    groups: [
+      {
+        category: "account",
+        label: "Account",
+        items: [
+          { key: "Balance", value: "$15.50" },
+          { key: "Account Type", value: "Trial" },
+          { key: "Phone Numbers", value: "3" },
+          { key: "Status", value: "Active" },
+        ],
+      },
+    ],
+  },
   error: null,
 };
 

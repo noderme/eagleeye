@@ -5,11 +5,81 @@ import { Topbar } from "@/components/topbar";
 import clsx from "clsx";
 import { timeAgo } from "@/lib/github";
 import { getCachedScan } from "@/lib/scan-cache";
+import type { ProviderSummary } from "@/lib/discovery-engine";
 
 interface ScanResult {
   scanned_at: string;
   provider_data: Record<string, any>;
   github_data: any[];
+}
+
+const PROVIDER_EMOJIS: Record<string, string> = {
+  openai: "🤖", stripe: "💳", vercel: "▲", anthropic: "🧠", supabase: "⚡",
+  resend: "📧", twilio: "📞", github: "🐙",
+  planetscale: "🪐", neon: "⚡", railway: "🚂", render: "🎨", fly: "✈️",
+  cloudflare: "☁️", aws: "🟠", gcp: "🔵", azure: "🔷", mongodb: "🍃",
+  redis: "🔴", sendgrid: "📨", mailgun: "📪", datadog: "🐕", sentry: "🔍",
+};
+
+const CATEGORY_ORDER = ["billing", "usage", "limits", "account", "health", "info", "warnings"];
+
+function ProviderUsageCard({ serviceId, summary }: { serviceId: string; summary: ProviderSummary }) {
+  const emoji = PROVIDER_EMOJIS[serviceId] ?? "🔌";
+  const label = summary.serviceName || (serviceId.charAt(0).toUpperCase() + serviceId.slice(1));
+
+  // Sort groups by category priority
+  const sortedGroups = [...(summary.groups ?? [])].sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a.category);
+    const bi = CATEGORY_ORDER.indexOf(b.category);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  const statusColor = summary.status === "critical" ? "text-red border-red/20"
+    : summary.status === "warn" ? "text-amber border-amber/20"
+    : "text-text border-border";
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
+        <span className="text-base">{emoji}</span>
+        {label}
+      </h2>
+      <div className={clsx("bg-surface border rounded-2xl overflow-hidden", statusColor.split(" ")[1] || "border-border")}>
+        {sortedGroups.map((group) => (
+          <div key={group.category} className="border-b border-border/50 last:border-0">
+            <div className="px-5 py-3 bg-surface2/30">
+              <span className="text-[10px] font-semibold uppercase tracking-[1px] text-muted">
+                {group.category}
+              </span>
+            </div>
+            <div className="px-5 py-4 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
+              {group.items.map((item) => {
+                const isWarning = group.category === "warnings";
+                const isGood = item.value?.toLowerCase().includes("ok") || item.value?.toLowerCase().includes("active") || item.value?.toLowerCase().includes("healthy");
+                const isBad = item.value?.toLowerCase().includes("error") || item.value?.toLowerCase().includes("fail") || item.value?.toLowerCase().includes("critical");
+                const valueColor = isWarning ? "text-amber" : isBad ? "text-red" : isGood ? "text-green" : "text-text";
+                return (
+                  <div key={item.key} className="flex flex-col gap-1">
+                    <div className="text-[10px] text-muted uppercase tracking-wide">{item.key}</div>
+                    <div className={clsx("text-[18px] font-bold font-mono leading-tight", valueColor)}>
+                      {item.value ?? "—"}
+                    </div>
+                    {item.alert && (
+                      <div className={clsx("text-[9px] font-bold uppercase tracking-wide", item.alert === "critical" ? "text-red" : "text-amber")}>{item.alert}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {sortedGroups.length === 0 && (
+          <div className="px-5 py-6 text-[12px] text-muted">No data available for this service.</div>
+        )}
+
+      </div>
+    </section>
+  );
 }
 
 export default function UsagePage() {
@@ -28,15 +98,31 @@ export default function UsagePage() {
   const providers = result?.provider_data ?? {};
   const insights = result?.github_data ?? [];
 
-  const openai = providers.openai ?? null;
-  const stripe = providers.stripe && !providers.stripe.error ? providers.stripe : null;
-  const vercel = providers.vercel && !providers.vercel.error ? providers.vercel : null;
-  const resend = providers.resend && !providers.resend.error ? providers.resend : null;
-  const twilio = providers.twilio && !providers.twilio.error ? providers.twilio : null;
-
-  const totalCIRuns = insights.reduce((s: number, i: any) => s + (i.ciRuns?.length ?? 0), 0);
   const totalCommits = insights.reduce((s: number, i: any) => s + (i.commits?.length ?? 0), 0);
   const totalOpenPRs = insights.reduce((s: number, i: any) => s + (i.openPRs ?? 0), 0);
+
+  // Collect all providers that have _providerSummary (dynamic LLM-discovered data)
+  const providerSummaries: Array<{ serviceId: string; summary: ProviderSummary }> = [];
+  for (const [serviceId, provData] of Object.entries(providers)) {
+    const d = provData as any;
+    if (d?._providerSummary) {
+      providerSummaries.push({ serviceId, summary: d._providerSummary as ProviderSummary });
+    }
+  }
+
+  // Providers with errors but no summary
+  const errorProviders: Array<{ serviceId: string; error: string }> = [];
+  for (const [serviceId, provData] of Object.entries(providers)) {
+    const d = provData as any;
+    if (!d?._providerSummary && (d?.error || d?._credentialError)) {
+      errorProviders.push({
+        serviceId,
+        error: d._credentialMessage ?? d.error ?? "Unknown error",
+      });
+    }
+  }
+
+  const hasAnyData = providerSummaries.length > 0 || errorProviders.length > 0 || insights.length > 0;
 
   return (
     <>
@@ -113,178 +199,25 @@ export default function UsagePage() {
           )}
         </section>
 
-        {/* OpenAI usage */}
-        {openai && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
-              <span className="text-base">🤖</span>
-              OpenAI Usage
-            </h2>
-            {openai.error ? (
-              <div className="bg-surface border border-red/20 rounded-2xl px-5 py-4 text-[12px] text-red">
-                {openai.error}
-              </div>
-            ) : (
-              <div className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <div className="text-[10px] text-muted uppercase tracking-wide mb-1">This month</div>
-                    <div className="text-[24px] font-bold font-mono text-text">
-                      {openai.monthlySpendUsd != null ? `$${openai.monthlySpendUsd.toFixed(2)}` : "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Spend limit</div>
-                    <div className="text-[24px] font-bold font-mono text-text">
-                      {openai.hardLimitUsd != null ? `$${openai.hardLimitUsd}` : "—"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Plan</div>
-                    <div className="text-[24px] font-bold font-mono text-text capitalize">
-                      {openai.plan ?? "—"}
-                    </div>
-                  </div>
-                </div>
-                {openai.hardLimitUsd && openai.monthlySpendUsd != null && (
-                  <div>
-                    <div className="flex justify-between text-[10px] text-muted mb-1.5">
-                      <span>Quota used</span>
-                      <span>{((openai.monthlySpendUsd / openai.hardLimitUsd) * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-dim rounded-full overflow-hidden">
-                      <div
-                        className={clsx("h-full rounded-full transition-all", (openai.monthlySpendUsd / openai.hardLimitUsd) > 0.8 ? "bg-red" : "bg-cyan")}
-                        style={{ width: `${Math.min(100, (openai.monthlySpendUsd / openai.hardLimitUsd) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
+        {/* Dynamic provider usage cards — one per service, all from LLM discovery */}
+        {providerSummaries.map(({ serviceId, summary }) => (
+          <ProviderUsageCard key={serviceId} serviceId={serviceId} summary={summary} />
+        ))}
 
-        {/* Stripe */}
-        {stripe && (
-          <section className="flex flex-col gap-3">
+        {/* Error providers */}
+        {errorProviders.map(({ serviceId, error }) => (
+          <section key={serviceId} className="flex flex-col gap-3">
             <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
-              <span className="text-base">💳</span>
-              Stripe Revenue
+              <span className="text-base">{PROVIDER_EMOJIS[serviceId] ?? "🔌"}</span>
+              {serviceId.charAt(0).toUpperCase() + serviceId.slice(1)}
             </h2>
-            <div className="bg-surface border border-border rounded-2xl p-5">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">MRR</div>
-                  <div className="text-[24px] font-bold font-mono text-green">${stripe.monthlyRecurringRevenue?.toFixed(2) ?? "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Active subscriptions</div>
-                  <div className="text-[24px] font-bold font-mono text-text">{stripe.activeSubscriptions ?? "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Balance</div>
-                  <div className="text-[24px] font-bold font-mono text-text">
-                    {stripe.availableBalanceUsd != null ? `$${stripe.availableBalanceUsd.toFixed(2)}` : "—"}
-                  </div>
-                </div>
-              </div>
+            <div className="bg-surface border border-red/20 rounded-2xl px-5 py-4 text-[12px] text-red">
+              {error}
             </div>
           </section>
-        )}
+        ))}
 
-        {/* Vercel */}
-        {vercel && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
-              <span className="text-base">▲</span>
-              Vercel Usage
-            </h2>
-            <div className="bg-surface border border-border rounded-2xl p-5">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Plan</div>
-                  <div className="text-[24px] font-bold font-mono text-text capitalize">{vercel.plan ?? "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Projects</div>
-                  <div className="text-[24px] font-bold font-mono text-text">{vercel.projectCount ?? "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Team</div>
-                  <div className="text-[14px] font-semibold text-muted mt-2 truncate">{vercel.teamName ?? "Personal"}</div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Resend */}
-        {resend && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
-              <span className="text-base">📧</span>
-              Resend Email
-            </h2>
-            <div className="bg-surface border border-border rounded-2xl p-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Domains</div>
-                  <div className="text-[24px] font-bold font-mono text-text">{resend.domainCount ?? "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Verified domains</div>
-                  <div className="text-[24px] font-bold font-mono text-green">
-                    {resend.domains ? resend.domains.filter((d: any) => d.status === "verified").length : "—"}
-                  </div>
-                </div>
-              </div>
-              {resend.domains?.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {resend.domains.map((d: any) => (
-                    <div key={d.name} className={clsx(
-                      "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono",
-                      d.status === "verified" ? "bg-green/5 border-green/20 text-green" : "bg-dim border-border text-muted"
-                    )}>
-                      {d.name}
-                      <span className="text-[9px] uppercase">{d.status}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* Twilio */}
-        {twilio && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
-              <span className="text-base">📱</span>
-              Twilio
-            </h2>
-            <div className="bg-surface border border-border rounded-2xl p-5">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Balance</div>
-                  <div className="text-[24px] font-bold font-mono text-text">
-                    {twilio.balance != null ? `$${parseFloat(twilio.balance).toFixed(2)}` : "—"}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Phone numbers</div>
-                  <div className="text-[24px] font-bold font-mono text-text">{twilio.phoneNumberCount ?? "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wide mb-1">Account type</div>
-                  <div className="text-[14px] font-semibold text-muted mt-2 capitalize">{twilio.type ?? "—"}</div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {!loading && Object.keys(providers).length === 0 && insights.length === 0 && (
+        {!loading && !hasAnyData && (
           <div className="bg-surface border border-border rounded-2xl px-6 py-10 text-center">
             <div className="text-[13px] text-muted">No usage data available yet.</div>
             <a href="/dashboard" className="text-[12px] text-cyan hover:underline mt-1 block">Trigger a scan →</a>

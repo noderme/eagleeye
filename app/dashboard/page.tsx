@@ -136,105 +136,8 @@ export default function DashboardPage() {
 
   const isActive = loading || scanning;
 
-  // ── Provider cards (computed outside JSX to avoid IIFE rendering issues) ──
-  type ProviderCard = { id: string; emoji: string; label: string; value: string; sub: string; color: string; extra?: React.ReactNode };
-  const providerCards: ProviderCard[] = [];
-
-  if (providers.openai) {
-    const pct = providers.openai.monthlySpendUsd != null && providers.openai.hardLimitUsd
-      ? providers.openai.monthlySpendUsd / providers.openai.hardLimitUsd : null;
-    providerCards.push({
-      id: "openai", emoji: "🤖", label: "OpenAI",
-      value: providers.openai.error ? "Error" : (providers.openai.monthlySpendUsd != null ? `$${providers.openai.monthlySpendUsd.toFixed(2)}` : "—"),
-      sub: providers.openai.error ?? (providers.openai.plan ?? "pay-as-you-go"),
-      color: providers.openai.error ? "var(--red)" : "var(--text)",
-      extra: pct != null ? (
-        <div style={{ marginTop: "8px" }}>
-          <div style={{ fontSize: "10px", color: "var(--muted)", marginBottom: "4px" }}>of ${providers.openai.hardLimitUsd} limit</div>
-          <div style={{ width: "100%", height: "6px", background: "var(--dim)", borderRadius: "999px", overflow: "hidden" }}>
-            <div style={{ height: "100%", borderRadius: "999px", background: pct > 0.8 ? "var(--red)" : "var(--cyan)", width: `${Math.min(100, pct * 100)}%` }} />
-          </div>
-        </div>
-      ) : null,
-    });
-  }
-  if (providers.stripe && !providers.stripe.error) {
-    providerCards.push({
-      id: "stripe", emoji: "💳", label: "Stripe MRR",
-      value: `$${(providers.stripe.monthlyRecurringRevenue ?? 0).toFixed(2)}`,
-      sub: `${providers.stripe.activeSubscriptions ?? 0} active sub${providers.stripe.activeSubscriptions !== 1 ? "s" : ""}`,
-      color: "var(--text)",
-    });
-  }
-  if (providers.vercel && !providers.vercel.error) {
-    providerCards.push({
-      id: "vercel", emoji: "▲", label: "Vercel",
-      value: providers.vercel.plan ?? "hobby",
-      sub: `${providers.vercel.projectCount ?? 0} projects`,
-      color: "var(--text)",
-    });
-  }
-  if (providers.anthropic) {
-    const valid = providers.anthropic.keyValid;
-    providerCards.push({
-      id: "anthropic", emoji: "🧠", label: "Anthropic",
-      value: providers.anthropic.error ? "Error" : (valid ? "Active" : "Invalid"),
-      sub: providers.anthropic.error ?? "Key health only",
-      color: providers.anthropic.error ? "var(--red)" : (valid ? "var(--green)" : "var(--red)"),
-    });
-  }
-  if (providers.supabase) {
-    providerCards.push({
-      id: "supabase", emoji: "⚡", label: "Supabase",
-      value: providers.supabase.error ? "Error" : (providers.supabase.plan ?? "free"),
-      sub: providers.supabase.error ?? `${providers.supabase.projectCount ?? 0} project${providers.supabase.projectCount !== 1 ? "s" : ""}`,
-      color: providers.supabase.error ? "var(--red)" : "var(--text)",
-    });
-  }
-  if (providers.resend) {
-    providerCards.push({
-      id: "resend", emoji: "📧", label: "Resend",
-      value: providers.resend.error ? "Error" : String(providers.resend.domainCount ?? 0),
-      sub: providers.resend.error ?? `domain${providers.resend.domainCount !== 1 ? "s" : ""} connected`,
-      color: providers.resend.error ? "var(--red)" : "var(--text)",
-    });
-  }
-  if (providers.twilio && !providers.twilio.error) {
-    providerCards.push({
-      id: "twilio", emoji: "📞", label: "Twilio",
-      value: providers.twilio.balance != null ? `$${parseFloat(providers.twilio.balance).toFixed(2)}` : "—",
-      sub: `${providers.twilio.phoneNumberCount ?? 0} number${providers.twilio.phoneNumberCount !== 1 ? "s" : ""}`,
-      color: "var(--text)",
-    });
-  }
-
-  // ── Dynamic provider cards (for any service discovered via LLM) ──
-  const KNOWN_PROVIDER_IDS = new Set(["openai","stripe","vercel","anthropic","supabase","resend","twilio","github"]);
-  const PROVIDER_EMOJIS: Record<string, string> = {
-    planetscale: "🪐", neon: "⚡", railway: "🚂", render: "🎨", fly: "✈️",
-    cloudflare: "☁️", aws: "🟠", gcp: "🔵", azure: "🔷", mongodb: "🍃",
-    redis: "🔴", sendgrid: "📨", mailgun: "📪", datadog: "🐕", sentry: "🔍",
-    linear: "📐", notion: "📝", airtable: "📊", hubspot: "🧡", salesforce: "☁️",
-  };
-  for (const [provId, provData] of Object.entries(providers)) {
-    if (KNOWN_PROVIDER_IDS.has(provId)) continue;
-    if (!provData || typeof provData !== "object") continue;
-    const d = provData as any;
-    const hasCredError = d._credentialError === true;
-    const emoji = PROVIDER_EMOJIS[provId] ?? "🔌";
-    const label = provId.charAt(0).toUpperCase() + provId.slice(1);
-    const summaryParts = d._summary ? d._summary.split("·") : [];
-    const value = hasCredError ? "Key Error" : (summaryParts[1]?.trim() ?? "Connected");
-    const sub = hasCredError ? (d._credentialMessage ?? "Invalid or expired API key") : (d._signal ?? d._summary ?? "");
-    providerCards.push({
-      id: provId, emoji, label,
-      value,
-      sub: sub.length > 60 ? sub.slice(0, 57) + "..." : sub,
-      color: hasCredError ? "var(--red)" : d._status === "warn" ? "var(--amber)" : "var(--text)",
-    });
-  }
-
   // ── Dynamic provider summaries (rich grouped cards from LLM discovery) ──
+  // All providers now go through the same LLM discovery pipeline — no hardcoded cards.
   const dynamicProviderSummaries: ProviderSummary[] = [];
   for (const [, provData] of Object.entries(providers)) {
     const d = provData as any;
@@ -242,8 +145,34 @@ export default function DashboardPage() {
       dynamicProviderSummaries.push(d._providerSummary as ProviderSummary);
     }
   }
-
-  // ── Credential failure alerts (loud banners for invalid/expired keys) ──
+  // Fallback cards for providers that returned data but no _providerSummary (e.g. credential errors, no LLM key)
+  type ProviderCard = { id: string; emoji: string; label: string; value: string; sub: string; color: string; extra?: React.ReactNode };
+  const providerCards: ProviderCard[] = [];
+  const PROVIDER_EMOJIS: Record<string, string> = {
+    openai: "🤖", stripe: "💳", vercel: "▲", anthropic: "🧠", supabase: "⚡",
+    resend: "📧", twilio: "📞", github: "🐙",
+    planetscale: "🪐", neon: "⚡", railway: "🚂", render: "🎨", fly: "✈️",
+    cloudflare: "☁️", aws: "🟠", gcp: "🔵", azure: "🔷", mongodb: "🍃",
+    redis: "🔴", sendgrid: "📨", mailgun: "📪", datadog: "🐕", sentry: "🔍",
+  };
+  for (const [provId, provData] of Object.entries(providers)) {
+    if (!provData || typeof provData !== "object") continue;
+    const d = provData as any;
+    // Skip providers that already have a rich _providerSummary card
+    if (d._providerSummary) continue;
+    const hasCredError = d._credentialError === true || (d.error && (d.error.includes("401") || d.error.includes("403") || d.error.includes("Invalid")));
+    const emoji = PROVIDER_EMOJIS[provId] ?? "🔌";
+    const label = provId.charAt(0).toUpperCase() + provId.slice(1);
+    const value = hasCredError ? "Key Error" : (d._noLlmKey ? "No LLM key" : "Connected");
+    const sub = hasCredError ? (d._credentialMessage ?? d.error ?? "Invalid or expired API key") : (d._signal ?? d._summary ?? "");
+    providerCards.push({
+      id: provId, emoji, label,
+      value,
+      sub: sub.length > 60 ? sub.slice(0, 57) + "..." : sub,
+      color: hasCredError ? "var(--red)" : d._status === "warn" ? "var(--amber)" : "var(--text)",
+    });
+  }
+    // ── Credential failure alerts (loud banners for invalid/expired keys) ──
   const credentialErrors: { provider: string; message: string }[] = [];
   for (const [provId, provData] of Object.entries(providers)) {
     const d = provData as any;
