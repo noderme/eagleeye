@@ -852,9 +852,13 @@ Extract all useful monitoring information and return the JSON summary.`;
       jsonText = textBlock?.text ?? "{}";
     } else if (llmKey.provider === "openai" || llmKey.provider === "ollama") {
       const clientOpts: any = { apiKey: llmKey.apiKey, timeout: 60_000 };
-      if (llmKey.provider === "ollama") clientOpts.baseURL = (llmKey as any).baseURL ?? "http://localhost:11434/v1";
+      if (llmKey.provider === "ollama") {
+        // Normalize: ensure base URL ends with /v1
+        const rawBase = llmKey.baseURL ?? "http://localhost:11434";
+        clientOpts.baseURL = rawBase.replace(/\/+$/, "").replace(/\/v1$/, "") + "/v1";
+      }
       const client = new OpenAI(clientOpts);
-      const model = llmKey.provider === "ollama" ? ((llmKey as any).model ?? "llama3.1:8b") : "gpt-4o";
+      const model = llmKey.provider === "ollama" ? (llmKey.model ?? "llama3.1:8b") : "gpt-4o";
       const response = await client.chat.completions.create({
         model,
         response_format: { type: "json_object" },

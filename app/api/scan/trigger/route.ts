@@ -92,9 +92,9 @@ export async function POST() {
         llmKey = llmKey ?? { provider: "gemini", apiKey: value.key };
       } else if (row.provider === "llm_ollama") {
         // For Ollama, the "key" field stores the base URL
+        // Pass it directly through LLMKey — do NOT use process.env mutation (unreliable in Next.js)
         const ollamaUrl = value.key?.trim() || "http://localhost:11434";
-        process.env.OLLAMA_BASE_URL = ollamaUrl;
-        llmKey = llmKey ?? { provider: "ollama", apiKey: "ollama" };
+        llmKey = llmKey ?? { provider: "ollama", apiKey: "ollama", baseURL: ollamaUrl };
       } else if (row.provider === "domains") {
         domains.push(...(row.extra_config?.domains ?? []));
       } else {

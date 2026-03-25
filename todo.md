@@ -69,3 +69,4 @@ The LLM discovers API endpoints automatically for any service. Users add a key â
 - [x] Update discovery prompt to extract all call parameters (query params, body, headers, dependencies) from docs
 - [x] Update verifyAndFetch to resolve and send queryParams, body, and all headers uniformly â€” no per-service code
 - [x] Fix Vercel credential key name mismatch: stored as 'key' but KNOWN_FETCHERS passes c.apiToken
+- [x] Fix Ollama 404: pass baseURL through LLMKey object instead of mutating process.env (unreliable in Next.js API routes)

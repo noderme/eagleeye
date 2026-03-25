@@ -17,6 +17,10 @@ export type LLMProvider = "anthropic" | "openai" | "gemini" | "ollama";
 export interface LLMKey {
   provider: LLMProvider;
   apiKey: string;
+  /** For Ollama: the base URL (e.g. http://localhost:11434/v1) */
+  baseURL?: string;
+  /** For Ollama: the model name to use */
+  model?: string;
 }
 
 export interface Recommendation {
@@ -116,9 +120,13 @@ async function callLLM(systemPrompt: string, userContent: string, llmKey: LLMKey
 
   // Ollama: OpenAI-compatible local endpoint
   if (llmKey.provider === "ollama") {
-    const baseURL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
-    const model = process.env.OLLAMA_MODEL ?? "llama3.1:8b";
-    const client = new OpenAI({ apiKey: "ollama", baseURL, timeout: 120_000 });
+    // Use baseURL from LLMKey (passed directly, not via process.env mutation)
+    // Normalize: ensure the base URL ends with /v1
+    const rawBase = llmKey.baseURL ?? process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+    const baseURL = rawBase.replace(/\/+$/, "").replace(/\/v1$/, "") + "/v1";
+    const model = llmKey.model ?? process.env.OLLAMA_MODEL ?? "llama3.1:8b";
+    console.log(`[Ollama] Using baseURL: ${baseURL}, model: ${model}`);
+    const client = new OpenAI({ apiKey: llmKey.apiKey || "ollama", baseURL, timeout: 120_000 });
     const resp = await client.chat.completions.create({
       model,
       max_tokens: 8000,
