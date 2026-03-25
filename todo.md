@@ -14,8 +14,15 @@
 - [x] Add TTL to scan cache (already implemented — 5 min TTL confirmed in scan-cache.ts)
 - [x] Add empty state on dashboard when no repos/scan data
 
+## User LLM Key (Bring Your Own Key)
+- [ ] Add LLM provider section to integrations page (OpenAI / Anthropic / Gemini key input)
+- [ ] Update key storage API to handle llm_openai, llm_anthropic, llm_gemini provider types
+- [ ] Rewrite /api/analyze to use user's stored LLM key instead of server env var
+- [ ] Multi-provider routing: OpenAI → gpt-4o-mini, Anthropic → claude-3-5-sonnet, Gemini → gemini-1.5-flash
+- [ ] Show "Add LLM key to enable AI insights" prompt on dashboard when no LLM key configured
+
 ## Architecture
-- [ ] Replace dynamic provider discovery (Claude-for-every-unknown) with hybrid approach:
-  - [ ] Build static registry of 50-100 common dev services in JSON
-  - [ ] Keep Claude as fallback for truly unknown providers
-  - [ ] Cache Claude-discovered providers permanently in DB (never call twice for same service)
+- [x] Replace dynamic provider discovery with hybrid approach:
+  - [x] Built static registry of 80+ common dev services in provider-registry.json
+  - [x] Generic credential inference fallback for truly unknown providers (no LLM cost)
+  - [x] dynamic-providers.ts rewritten to use static registry as primary lookup

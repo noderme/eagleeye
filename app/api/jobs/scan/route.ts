@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { decrypt } from "@/lib/crypto";
 import { runAllProviders, type Credentials } from "@/lib/providers";
 import { fetchAllRepoInsights, type RepoSummary } from "@/lib/github";
-import { runAnalysis } from "@/lib/analyze";
+import { runAnalysis, type LLMKey } from "@/lib/analyze";
 
 const HISTORY_SCANS = 7;         // how many past scans to pass to Claude
 const MIN_SCAN_GAP_SECONDS = 600; // idempotency: skip if scanned within 10 min
@@ -93,10 +93,17 @@ async function scanUser(userId: string, service: ReturnType<typeof createService
   const credentials: Credentials = {};
   const domains: string[] = [];
   const keyMeta: Record<string, Record<string, any> | null> = {};
+  let llmKey: LLMKey | undefined;
 
   for (const row of keyRows.data ?? []) {
     const value = JSON.parse(decrypt(row.ciphertext, row.iv));
-    if (row.provider === "domains") {
+    if (row.provider === "llm_openai") {
+      llmKey = { provider: "openai", apiKey: value.key };
+    } else if (row.provider === "llm_anthropic") {
+      llmKey = llmKey ?? { provider: "anthropic", apiKey: value.key };
+    } else if (row.provider === "llm_gemini") {
+      llmKey = llmKey ?? { provider: "gemini", apiKey: value.key };
+    } else if (row.provider === "domains") {
       domains.push(...(row.extra_config?.domains ?? []));
     } else {
       (credentials as any)[row.provider] = value;
@@ -113,12 +120,17 @@ async function scanUser(userId: string, service: ReturnType<typeof createService
   let scanError = null;
   let nextScanIn = 86400; // fallback: 24h
 
-  try {
-    analysis = await runAnalysis(githubInsights, providers, domainResults, historyRows.data ?? [], keyMeta);
-    nextScanIn = analysis.nextScanIn;
-  } catch (err) {
-    scanError = String(err);
-    nextScanIn = 3600; // on error, retry in 1 hour
+  if (!llmKey) {
+    scanError = "NO_LLM_KEY";
+    console.warn(`[Eagle Eye] User ${userId}: no LLM key configured — skipping analysis`);
+  } else {
+    try {
+      analysis = await runAnalysis(githubInsights, providers, domainResults, historyRows.data ?? [], keyMeta, llmKey);
+      nextScanIn = analysis.nextScanIn;
+    } catch (err) {
+      scanError = String(err);
+      nextScanIn = 3600; // on error, retry in 1 hour
+    }
   }
 
   await service.from("scan_results").insert({

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { encrypt } from "@/lib/crypto";
+import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   fetchOpenAI,
   fetchAnthropic,
@@ -11,6 +14,44 @@ import {
   fetchResend,
   fetchTwilio,
 } from "@/lib/providers";
+
+// Validate an LLM key with a minimal inference call
+async function validateLLMKey(provider: string, apiKey: string): Promise<{ valid: boolean; error: string | null }> {
+  try {
+    if (provider === "llm_openai") {
+      const client = new OpenAI({ apiKey, timeout: 15_000 });
+      await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "hi" }],
+      });
+      return { valid: true, error: null };
+    }
+    if (provider === "llm_anthropic") {
+      const client = new Anthropic({ apiKey, timeout: 15_000 });
+      await client.messages.create({
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "hi" }],
+      });
+      return { valid: true, error: null };
+    }
+    if (provider === "llm_gemini") {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      await model.generateContent({ contents: [{ role: "user", parts: [{ text: "hi" }] }] });
+      return { valid: true, error: null };
+    }
+    return { valid: true, error: null };
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    // Surface friendly errors for common auth failures
+    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("invalid_api_key") || msg.includes("API key")) {
+      return { valid: false, error: "Invalid API key — check the key and try again." };
+    }
+    return { valid: false, error: msg };
+  }
+}
 
 // Lightweight validators — same fetchers, just check for error field
 async function validate(provider: string, credentials: Record<string, string>): Promise<{ valid: boolean; error: string | null }> {
@@ -24,6 +65,9 @@ async function validate(provider: string, credentials: Record<string, string>): 
       case "vercel":    result = await fetchVercel(credentials.key); break;
       case "resend":    result = await fetchResend(credentials.key); break;
       case "twilio":    result = await fetchTwilio(credentials.accountSid, credentials.authToken); break;
+      case "llm_openai":
+      case "llm_anthropic":
+      case "llm_gemini":   return validateLLMKey(provider, credentials.key);
       default:          return { valid: true, error: null }; // unknown — skip validation
     }
     return { valid: !result.error, error: result.error ?? null };

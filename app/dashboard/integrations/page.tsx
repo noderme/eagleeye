@@ -188,7 +188,8 @@ export default function IntegrationsPage() {
         if (detectedData.scannedAt) setScanAge(timeAgo(detectedData.scannedAt));
 
         // Any connected provider not in our PROVIDERS list is a custom one
-        const knownIds = new Set(PROVIDERS.map(p => p.id).concat(["domains"]));
+        // Exclude llm_* providers (they live in the Analysis Engine section)
+        const knownIds = new Set(PROVIDERS.map(p => p.id).concat(["domains", "llm_openai", "llm_anthropic", "llm_gemini"]));
         const custom = (status.integrations ?? [])
           .map((i: any) => i.provider as string)
           .filter((p: string) => !knownIds.has(p));
@@ -809,8 +810,131 @@ export default function IntegrationsPage() {
           )}
         </section>
 
+        {/* ── LLM Analysis Engine ─────────────────────────────────────────── */}
+        <section className="flex flex-col gap-3 mt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">AI Analysis Engine</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan/10 border border-cyan/20 text-cyan">Required for insights</span>
+          </div>
+          <div className="p-4 bg-surface border border-border rounded-2xl flex flex-col gap-3">
+            <p className="text-[12px] text-muted leading-relaxed">
+              Eagle Eye uses your own LLM API key to generate cross-provider insights. Your key is encrypted and never shared. Add one key — OpenAI, Anthropic, or Gemini.
+            </p>
+            <LLMKeySection connected={connected} setConnected={setConnected} />
+          </div>
+        </section>
+
         </div>
       </main>
     </>
+  );
+}
+
+// ── LLM Key Section Component ──────────────────────────────────────────────
+
+const LLM_PROVIDERS = [
+  { id: "llm_openai", name: "OpenAI", emoji: "🤖", placeholder: "sk-...", hint: "Uses gpt-4o-mini. Get your key at platform.openai.com → API Keys." },
+  { id: "llm_anthropic", name: "Anthropic", emoji: "🧠", placeholder: "sk-ant-...", hint: "Uses claude-3-5-sonnet. Get your key at console.anthropic.com → API Keys." },
+  { id: "llm_gemini", name: "Gemini", emoji: "✨", placeholder: "AIza...", hint: "Uses gemini-1.5-flash. Get your key at aistudio.google.com → Get API Key." },
+];
+
+function LLMKeySection({ connected, setConnected }: { connected: Set<string>; setConnected: (s: Set<string>) => void }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(id: string) {
+    const key = inputs[id]?.trim();
+    if (!key) return;
+    setSaving(id);
+    setError(null);
+    try {
+      const res = await fetch("/api/keys/store", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: id, credentials: { key } }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Failed to save"); return; }
+      setConnected(new Set([...connected, id]));
+      setExpanded(null);
+      setSavedMsg(id);
+      setTimeout(() => setSavedMsg(null), 3000);
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function disconnect(id: string) {
+    await fetch("/api/keys/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: id }),
+    });
+    const next = new Set(connected);
+    next.delete(id);
+    setConnected(next);
+  }
+
+  const connectedLLM = LLM_PROVIDERS.filter(p => connected.has(p.id));
+  const availableLLM = LLM_PROVIDERS.filter(p => !connected.has(p.id));
+
+  return (
+    <div className="flex flex-col gap-2">
+      {connectedLLM.map(p => (
+        <div key={p.id} className="flex items-center justify-between px-3 py-2 bg-dim border border-border rounded-xl">
+          <div className="flex items-center gap-2">
+            <span>{p.emoji}</span>
+            <span className="text-[12px] font-medium text-text">{p.name}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green/10 border border-green/20 text-green">Active</span>
+          </div>
+          <button onClick={() => disconnect(p.id)} className="text-[11px] text-muted hover:text-red transition-colors">Remove</button>
+        </div>
+      ))}
+      {connectedLLM.length === 0 && (
+        <div className="text-[12px] text-amber flex items-center gap-2">
+          <span>⚠️</span> No LLM key added — AI insights will be disabled until you add one.
+        </div>
+      )}
+      {availableLLM.map(p => (
+        <div key={p.id} className="border border-border rounded-xl overflow-hidden">
+          <button
+            onClick={() => setExpanded(expanded === p.id ? null : p.id)}
+            className="w-full flex items-center justify-between px-3 py-2 bg-surface hover:bg-dim transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span>{p.emoji}</span>
+              <span className="text-[12px] text-text">{p.name}</span>
+            </div>
+            {expanded === p.id ? <ChevronUp className="w-3.5 h-3.5 text-muted" /> : <ChevronDown className="w-3.5 h-3.5 text-muted" />}
+          </button>
+          {expanded === p.id && (
+            <div className="px-3 pb-3 flex flex-col gap-2 bg-dim border-t border-border">
+              {p.hint && <p className="text-[11px] text-muted mt-2">{p.hint}</p>}
+              <input
+                type="password"
+                placeholder={p.placeholder}
+                value={inputs[p.id] ?? ""}
+                onChange={e => setInputs({ ...inputs, [p.id]: e.target.value })}
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-[12px] text-text placeholder:text-muted focus:outline-none focus:border-cyan/40"
+              />
+              {error && <p className="text-[11px] text-red">{error}</p>}
+              <button
+                onClick={() => save(p.id)}
+                disabled={!inputs[p.id]?.trim() || saving === p.id}
+                className="px-4 py-1.5 bg-cyan text-black text-[12px] font-semibold rounded-lg disabled:opacity-40 hover:bg-cyan/90 transition-colors"
+              >
+                {saving === p.id ? "Saving..." : "Save key"}
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+      {savedMsg && (
+        <p className="text-[11px] text-green flex items-center gap-1"><Check className="w-3 h-3" /> Key saved successfully</p>
+      )}
+    </div>
   );
 }

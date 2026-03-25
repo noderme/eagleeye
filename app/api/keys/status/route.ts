@@ -16,6 +16,7 @@ export async function GET() {
         { provider: "resend", created_at: new Date(Date.now() - 5 * 86400000).toISOString(), extra_config: null },
         { provider: "twilio", created_at: new Date(Date.now() - 3 * 86400000).toISOString(), extra_config: null },
         { provider: "domains", created_at: new Date(Date.now() - 2 * 86400000).toISOString(), extra_config: { domains: ["example.com", "api.example.com", "expiring-soon.com"] } },
+        { provider: "llm_openai", created_at: new Date(Date.now() - 1 * 86400000).toISOString(), extra_config: null },
       ],
       githubConnected: true,
     });

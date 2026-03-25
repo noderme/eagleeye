@@ -16,7 +16,7 @@ const SCAN_STEPS = [
   "Scanning for risky files and secrets...",
   "Querying provider APIs...",
   "Checking domain expiry via RDAP...",
-  "Running Claude AI analysis...",
+  "Running AI analysis...",
   "Generating recommendations...",
 ];
 
@@ -308,6 +308,21 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* ── NO LLM KEY BANNER ── */}
+        {!loading && !scanning && result?.error === "NO_LLM_KEY" && (
+          <div className="bg-amber/5 border border-amber/20 rounded-2xl px-5 py-4 flex items-start gap-3">
+            <span className="text-xl mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <div className="text-[13px] font-semibold text-amber mb-1">AI analysis disabled — no LLM key configured</div>
+              <div className="text-[12px] text-muted">
+                Eagle Eye scanned your infrastructure but couldn't generate insights. Add an OpenAI, Anthropic, or Gemini API key in{" "}
+                <a href="/dashboard/integrations" className="text-cyan underline underline-offset-2 hover:text-cyan/80">Integrations → AI Analysis Engine</a>{" "}
+                to enable cross-provider recommendations.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── EMPTY STATE: no scan yet and not loading ── */}
         {!loading && !scanning && !result && (

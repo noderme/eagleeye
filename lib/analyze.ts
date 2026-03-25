@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { RepoInsight } from "./github";
 import { summarizeGitHub } from "./summarize/github";
 import { summarizeOpenAI } from "./summarize/openai";
@@ -9,13 +11,12 @@ import { summarizeTwilio } from "./summarize/twilio";
 import { summarizeDomains, minDomainDaysLeft } from "./summarize/domains";
 import { summarizeKeyExpiry, minKeyExpiryDays } from "./summarize/keymeta";
 
-// Lazy-initialize the Anthropic client to avoid crashes when ANTHROPIC_API_KEY is not set
-let _client: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!_client) {
-    _client = new Anthropic({ timeout: 120_000 });
-  }
-  return _client;
+// ── LLM provider types ───────────────────────────────────────────────────────
+export type LLMProvider = "anthropic" | "openai" | "gemini";
+
+export interface LLMKey {
+  provider: LLMProvider;
+  apiKey: string;
 }
 
 export interface Recommendation {
@@ -88,13 +89,61 @@ function computeSafetyFloor(
 
 // ── Main enhanced analysis with extended thinking ────────────────────────────
 
+// ── Multi-provider LLM call ──────────────────────────────────────────────────
+async function callLLM(systemPrompt: string, userContent: string, llmKey: LLMKey): Promise<string> {
+  if (llmKey.provider === "openai") {
+    const client = new OpenAI({ apiKey: llmKey.apiKey, timeout: 120_000 });
+    const resp = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_tokens: 8000,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+    });
+    return resp.choices[0]?.message?.content ?? "";
+  }
+
+  if (llmKey.provider === "gemini") {
+    const genAI = new GoogleGenerativeAI(llmKey.apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent({
+      systemInstruction: systemPrompt,
+      contents: [{ role: "user", parts: [{ text: userContent }] }],
+    });
+    return result.response.text();
+  }
+
+  // Default: Anthropic
+  const client = new Anthropic({ apiKey: llmKey.apiKey, timeout: 120_000 });
+  const stream = client.messages.stream({
+    model: "claude-3-5-sonnet-20241022",
+    max_tokens: 8000,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userContent }],
+  });
+  const message = await Promise.race([
+    stream.finalMessage(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Claude analysis timed out after 120s")), 120_000)
+    ),
+  ]);
+  const textBlock = message.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") throw new Error("No text response from Claude");
+  return textBlock.text;
+}
+
 export async function runEnhancedAnalysis(
   githubInsights: RepoInsight[],
   providers: Record<string, any>,
   domains: any[],
   history: any[] = [],
-  keyMeta: Record<string, Record<string, any> | null> = {}
+  keyMeta: Record<string, Record<string, any> | null> = {},
+  llmKey?: LLMKey
 ): Promise<AnalysisResult> {
+  if (!llmKey) {
+    throw new Error("NO_LLM_KEY");
+  }
   // Build key expiry lines for all providers that have expiry set
   const keyExpiryLines = Object.entries(keyMeta)
     .map(([provider, meta]) => summarizeKeyExpiry(provider, meta))
@@ -215,40 +264,11 @@ nextScanIn guidance:
 
 Sort: critical first, then warning, saving, info. Max 15 total.`;
 
-  const stream = getClient().messages.stream({
-    model: "claude-opus-4-6",
-    max_tokens: 16000, // Increased for extended thinking
-    thinking: {
-      type: "enabled",
-      budget_tokens: 10000, // Allow extended thinking
-    },
-    system: systemPrompt,
-    messages: [
-      {
-        role: "user",
-        content: `Current infrastructure state:\n\n${context}
+  const userContent = `Current infrastructure state:\n\n${context}\n\nPlease analyze this infrastructure deeply:\n1. Cross-correlate signals across all providers\n2. Identify systemic risks and patterns\n3. Calculate specific cost optimization opportunities\n4. Prioritize recommendations by business impact\n5. Provide step-by-step reasoning for each recommendation`;
 
-Please analyze this infrastructure deeply:
-1. Cross-correlate signals across all providers
-2. Identify systemic risks and patterns
-3. Calculate specific cost optimization opportunities
-4. Prioritize recommendations by business impact
-5. Provide step-by-step reasoning for each recommendation`,
-      },
-    ],
-  });
+  const rawText = await callLLM(systemPrompt, userContent, llmKey);
 
-  const message = await Promise.race([
-    stream.finalMessage(),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Claude analysis timed out after 120s")), 120_000)
-    ),
-  ]);
-
-  const textBlock = message.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") throw new Error("No text response from Claude");
-
-  const cleaned = textBlock.text.replace(/```json|```/g, "").trim();
+  const cleaned = rawText.replace(/```json|```/g, "").trim();
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("Could not parse Claude response as JSON");
 

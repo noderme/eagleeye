@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { decrypt } from "@/lib/crypto";
 import { runAllProviders, type Credentials } from "@/lib/providers";
 import { fetchAllRepoInsights, type RepoSummary } from "@/lib/github";
-import { runAnalysis } from "@/lib/analyze";
+import { runAnalysis, type LLMKey } from "@/lib/analyze";
 import { MOCK_MODE_ENABLED } from "@/lib/config";
 import { getMockScanResult } from "@/lib/mock-scan";
 
@@ -79,10 +79,18 @@ export async function POST() {
     const credentials: Credentials = {};
     const domains: string[] = [];
     const keyMeta: Record<string, Record<string, any> | null> = {};
+    let llmKey: LLMKey | undefined;
 
     for (const row of keyRows ?? []) {
       const value = JSON.parse(decrypt(row.ciphertext, row.iv));
-      if (row.provider === "domains") {
+      // Extract LLM keys — these power analysis, not provider data fetching
+      if (row.provider === "llm_openai") {
+        llmKey = { provider: "openai", apiKey: value.key };
+      } else if (row.provider === "llm_anthropic") {
+        llmKey = llmKey ?? { provider: "anthropic", apiKey: value.key }; // openai takes priority if both set
+      } else if (row.provider === "llm_gemini") {
+        llmKey = llmKey ?? { provider: "gemini", apiKey: value.key };
+      } else if (row.provider === "domains") {
         domains.push(...(row.extra_config?.domains ?? []));
       } else {
         credentials[row.provider] = value;
@@ -98,14 +106,19 @@ export async function POST() {
       runAllProviders(credentials, domains),
     ]);
 
-    // Run Claude analysis
+    // Run LLM analysis — requires user-provided LLM key
     let analysis = null;
     let scanError = null;
-    try {
-      analysis = await runAnalysis(githubInsights, providers, domainResults, historyRows ?? [], keyMeta);
-    } catch (err) {
-      scanError = String(err);
-      console.error("[Eagle Eye] Analysis error:", err);
+    if (!llmKey) {
+      scanError = "NO_LLM_KEY";
+      console.warn("[Eagle Eye] No LLM key configured — skipping analysis");
+    } else {
+      try {
+        analysis = await runAnalysis(githubInsights, providers, domainResults, historyRows ?? [], keyMeta, llmKey);
+      } catch (err) {
+        scanError = String(err);
+        console.error("[Eagle Eye] Analysis error:", err);
+      }
     }
 
     // Return without saving — caller decides whether to persist
