@@ -843,6 +843,7 @@ function LLMKeySection({ connected, setConnected }: { connected: Set<string>; se
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function save(id: string) {
@@ -861,7 +862,8 @@ function LLMKeySection({ connected, setConnected }: { connected: Set<string>; se
       setConnected(new Set([...connected, id]));
       setExpanded(null);
       setSavedMsg(id);
-      setTimeout(() => setSavedMsg(null), 3000);
+      setWarning(data.warning ?? null);
+      setTimeout(() => setSavedMsg(null), 5000);
     } finally {
       setSaving(null);
     }
@@ -934,6 +936,9 @@ function LLMKeySection({ connected, setConnected }: { connected: Set<string>; se
       ))}
       {savedMsg && (
         <p className="text-[11px] text-green flex items-center gap-1"><Check className="w-3 h-3" /> Key saved successfully</p>
+      )}
+      {warning && (
+        <p className="text-[11px] text-amber leading-relaxed mt-1">⚠️ {warning}</p>
       )}
     </div>
   );

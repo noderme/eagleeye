@@ -5,6 +5,7 @@ import { encrypt } from "@/lib/crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { friendlyError } from "@/lib/errors";
 import {
   fetchOpenAI,
   fetchAnthropic,
@@ -45,11 +46,12 @@ async function validateLLMKey(provider: string, apiKey: string): Promise<{ valid
     return { valid: true, error: null };
   } catch (e: any) {
     const msg = e?.message ?? String(e);
-    // Surface friendly errors for common auth failures
-    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("invalid_api_key") || msg.includes("API key")) {
-      return { valid: false, error: "Invalid API key — check the key and try again." };
+    const friendly = friendlyError(e);
+    // Quota errors mean the key is real but exhausted — save it with a warning
+    if (msg.includes("429") || msg.includes("quota") || msg.includes("Too Many Requests") || msg.includes("RESOURCE_EXHAUSTED")) {
+      return { valid: true, error: friendly };
     }
-    return { valid: false, error: msg };
+    return { valid: false, error: friendly };
   }
 }
 
@@ -72,7 +74,7 @@ async function validate(provider: string, credentials: Record<string, string>): 
     }
     return { valid: !result.error, error: result.error ?? null };
   } catch (e) {
-    return { valid: false, error: String(e) };
+    return { valid: false, error: friendlyError(e) };
   }
 }
 
@@ -111,5 +113,6 @@ export async function POST(req: NextRequest) {
   );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true });
+  // validationError here means a non-fatal warning (e.g. quota exceeded but key is real)
+  return NextResponse.json({ success: true, warning: validationError ?? null });
 }
