@@ -835,7 +835,7 @@ export default function IntegrationsPage() {
 const LLM_PROVIDERS = [
   { id: "llm_openai", name: "OpenAI", emoji: "🤖", placeholder: "sk-...", hint: "Uses gpt-4o-mini. Get your key at platform.openai.com → API Keys." },
   { id: "llm_anthropic", name: "Anthropic", emoji: "🧠", placeholder: "sk-ant-...", hint: "Uses claude-3-5-sonnet. Get your key at console.anthropic.com → API Keys." },
-  { id: "llm_gemini", name: "Gemini", emoji: "✨", placeholder: "AIza...", hint: "Uses gemini-1.5-flash. Get your key at aistudio.google.com → Get API Key." },
+  { id: "llm_gemini", name: "Gemini", emoji: "✨", placeholder: "AIza...", hint: "Uses gemini-2.0-flash (free tier available). Get your key at aistudio.google.com → Get API Key." },
 ];
 
 function LLMKeySection({ connected, setConnected }: { connected: Set<string>; setConnected: (s: Set<string>) => void }) {

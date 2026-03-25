@@ -15,7 +15,7 @@ const SCAN_STEPS = [
   "Scanning for risky files and secrets…",
   "Querying provider APIs…",
   "Checking domain expiry…",
-  "Running Claude AI analysis…",
+  "Running AI analysis…",
   "Generating recommendations…",
   "Almost done…",
 ];

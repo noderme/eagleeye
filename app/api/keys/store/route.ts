@@ -38,7 +38,7 @@ async function validateLLMKey(provider: string, apiKey: string): Promise<{ valid
     }
     if (provider === "llm_gemini") {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
       await model.generateContent({ contents: [{ role: "user", parts: [{ text: "hi" }] }] });
       return { valid: true, error: null };
     }

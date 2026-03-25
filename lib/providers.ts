@@ -437,16 +437,21 @@ export async function runAllProviders(credentials: Credentials, domains: string[
     const fetcher = KNOWN_FETCHERS[provider];
     if (MOCK_MODE_ENABLED) {
       const mockData = getMockProvider(provider);
-      if (mockData) {
-        tasks.push(Promise.resolve(mockData));
-      } else {
-        tasks.push(fetchWithClaude(provider, creds)); // Still use Claude for unknown providers even in mock mode, but it will return mock data
-      }
+      tasks.push(Promise.resolve(mockData ?? { provider, _skipped: true }));
     } else if (fetcher) {
       tasks.push(fetcher(creds));
     } else {
-      // Unknown provider — let Claude figure it out
-      tasks.push(fetchWithClaude(provider, creds));
+      // Unknown/custom provider — return a lightweight placeholder so the scan
+      // doesn’t crash. The AI analysis step will still see the provider name
+      // and credential shape and can surface relevant recommendations.
+      tasks.push(Promise.resolve({
+        provider,
+        _unknown: true,
+        credentialFields: Object.keys(creds),
+        _summary: `${provider} — custom integration`,
+        _signal: "Custom provider connected. Eagle Eye will include it in AI analysis.",
+        _status: "good",
+      }));
     }
     keys.push(provider);
   }

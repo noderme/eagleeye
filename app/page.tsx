@@ -23,7 +23,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "AI Recommendations",
-    desc: "Claude Opus reasons across all your signals and tells you exactly what to fix — no dashboards to interpret, just verdicts.",
+    desc: "AI reasons across all your signals and tells you exactly what to fix — no dashboards to interpret, just verdicts.",
   },
   {
     icon: ShieldCheck,
@@ -348,7 +348,7 @@ export default function LandingPage() {
               {
                 step: "03",
                 title: "Get your report",
-                desc: "Eagle Eye scans everything, runs Claude AI analysis across all signals, and surfaces prioritised recommendations — sorted by what needs immediate action.",
+                desc: "Eagle Eye scans everything, runs AI analysis across all signals, and surfaces prioritised recommendations — sorted by what needs immediate action.",
               },
             ].map(({ step, title, desc }) => (
               <div key={step} className="flex items-start gap-6 bg-surface border border-border rounded-2xl p-6">

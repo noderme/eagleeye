@@ -106,7 +106,7 @@ async function callLLM(systemPrompt: string, userContent: string, llmKey: LLMKey
 
   if (llmKey.provider === "gemini") {
     const genAI = new GoogleGenerativeAI(llmKey.apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     const result = await model.generateContent({
       systemInstruction: systemPrompt,
       contents: [{ role: "user", parts: [{ text: userContent }] }],
