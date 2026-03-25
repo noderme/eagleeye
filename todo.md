@@ -73,3 +73,4 @@ The LLM discovers API endpoints automatically for any service. Users add a key �
 - [x] Auto-detect key expiry from any service's token metadata endpoint via discovery engine (uniform, no special cases per provider)
 - [x] verifyAndFetch: scan all endpoint responses for expiry-like fields and store as keyExpiresAt automatically
 - [x] Dashboard: three expiry states — has expiry, confirmed no expiry (service doesn't have the concept), unknown (not yet scanned)
+- [x] Fix Alerts tab badge showing "1" when Alerts page shows "No active alerts — All systems healthy" (badge count and page state are out of sync)

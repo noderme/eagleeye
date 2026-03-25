@@ -60,9 +60,16 @@ export function Sidebar() {
         return (new Date(exp).getTime() - now) / 86400000 <= 30;
       }).length;
 
-      // Alerts: critical recommendations from latest scan
+      // Alerts: exact same formula as the Alerts page
+      // failingCI + riskyFiles + (critical|warning) recs + urgent domains (<=30 days)
+      const insights: any[] = scan.result?.github_data ?? [];
+      const scanDomains: any[] = scan.result?.domain_data ?? [];
       const recs = scan.result?.analysis?.recommendations ?? [];
-      const alerts = recs.filter((r: any) => r.severity === "critical").length;
+      const failingCI = insights.filter((i: any) => i.ciRuns?.[0]?.conclusion === "failure").length;
+      const riskyFiles = insights.reduce((acc: number, i: any) => acc + (i.riskyFiles?.length ?? 0), 0);
+      const criticalRecs = recs.filter((r: any) => r.severity === "critical" || r.severity === "warning").length;
+      const urgentDomains = scanDomains.filter((d: any) => d.daysLeft !== null && d.daysLeft <= 30).length;
+      const alerts = failingCI + riskyFiles + criticalRecs + urgentDomains;
 
       setBadges({ alerts, keyHygiene, integrations });
     }
