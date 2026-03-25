@@ -1,20 +1,21 @@
 /**
  * Eagle Eye — Dynamic Provider Runner
  *
- * Replaces the hardcoded KNOWN_FETCHERS approach with fully dynamic discovery.
- * For any service:
- * 1. Check DB for cached endpoint map
- * 2. If no cache → run LLM discovery to find endpoints
- * 3. Verify endpoints with real HTTP calls
- * 4. Save verified map to DB for future scans
- * 5. Return live data + raw bodies for LLM analysis
+ * Every service — Vercel, OpenAI, Stripe, GitHub, Anthropic, or any custom service —
+ * goes through the SAME pipeline:
  *
- * Known providers (OpenAI, Stripe, etc.) still use their optimized fetchers
- * for reliability, but unknown providers go through dynamic discovery.
+ * 1. Check DB for a cached endpoint map (30-day TTL)
+ * 2. If no cache → fetch live API docs → LLM extracts complete call specs
+ * 3. Verify every endpoint with real HTTP calls using the user's credentials
+ * 4. Cache only the verified endpoints to DB for future scans
+ * 5. LLM summarizes the live data into structured groups for the dashboard
+ *
+ * There is no "known" vs "unknown" distinction. No hardcoded fetchers.
+ * If the LLM misses an endpoint, we improve the discovery prompt — not add more hardcoding.
  */
 
 import { createServiceClient } from "@/lib/supabase/service";
-import { KNOWN_FETCHERS, type Credentials, checkDomain } from "@/lib/providers";
+import { type Credentials, checkDomain } from "@/lib/providers";
 import { runDynamicProvider, type LiveProviderData, type ProviderSummary } from "@/lib/discovery-engine";
 import { loadEndpointMap, saveEndpointMap } from "@/lib/endpoint-store";
 import { MOCK_MODE_ENABLED } from "@/lib/config";
@@ -24,7 +25,7 @@ import type { LLMKey } from "@/lib/analyze";
 export type { Credentials };
 
 /**
- * Run all providers — known ones use optimized fetchers, unknown ones use dynamic discovery.
+ * Run all providers through the unified dynamic discovery pipeline.
  * Returns the same shape as the old runAllProviders for full backward compatibility.
  */
 export async function runAllProvidersDynamic(
@@ -42,36 +43,22 @@ export async function runAllProvidersDynamic(
     if (MOCK_MODE_ENABLED) {
       const mockData = getMockProvider(provider);
       tasks.push(Promise.resolve(mockData ?? { provider, _skipped: true }));
+    } else if (llmKey) {
+      // Every service goes through the same LLM discovery pipeline
+      tasks.push(runDynamicProviderWithCache(provider, creds, llmKey, service));
     } else {
-      const knownFetcher = KNOWN_FETCHERS[provider];
-      if (knownFetcher) {
-        // Use the optimized hardcoded fetcher for known providers
-        tasks.push(
-          knownFetcher(creds).catch((err: any) => ({
-            provider,
-            error: String(err),
-            _summary: `${provider} — fetch error`,
-            _signal: String(err),
-            _status: "warn",
-          }))
-        );
-      } else if (llmKey) {
-        // Unknown provider — use dynamic discovery
-        tasks.push(runDynamicProviderWithCache(provider, creds, llmKey, service));
-      } else {
-        // No LLM key — return placeholder for unknown providers
-        tasks.push(
-          Promise.resolve({
-            provider,
-            _unknown: true,
-            _noLlmKey: true,
-            credentialFields: Object.keys(creds),
-            _summary: `${provider} — add an LLM key to enable dynamic discovery`,
-            _signal: "Connect an OpenAI, Anthropic, or Gemini key on the Integrations page to enable automatic API discovery for this service.",
-            _status: "warn",
-          })
-        );
-      }
+      // No LLM key configured — cannot run discovery
+      tasks.push(
+        Promise.resolve({
+          provider,
+          _unknown: true,
+          _noLlmKey: true,
+          credentialFields: Object.keys(creds),
+          _summary: `${provider} — add an LLM key to enable discovery`,
+          _signal: "Connect an OpenAI, Anthropic, or Ollama key on the Integrations page to enable automatic API discovery.",
+          _status: "warn",
+        })
+      );
     }
     keys.push(provider);
   }
@@ -99,7 +86,7 @@ export async function runAllProvidersDynamic(
 }
 
 /**
- * Run dynamic discovery for an unknown provider, with DB caching.
+ * Run dynamic discovery for a provider, with DB caching.
  * Returns LiveProviderData with _providerSummary attached for dashboard display.
  */
 async function runDynamicProviderWithCache(
@@ -119,10 +106,10 @@ async function runDynamicProviderWithCache(
     cachedMap
   );
 
-  // Save updated endpoint map back to DB — but ONLY store verified endpoints.
-  // Discovery collects ALL GET endpoints from docs (no pre-filter).
+  // Save updated endpoint map back to DB — ONLY store verified endpoints.
+  // Discovery collects ALL endpoints from docs (no pre-filter).
   // Verification is the real gate: only endpoints that returned real data get cached.
-  // This means future scans skip endpoints that never worked, keeping the cache lean.
+  // This keeps the cache lean and ensures future scans only hit working endpoints.
   const verifiedEndpoints = endpointMap.endpoints.filter(e => e.verified === true);
   const hasNewVerifications = verifiedEndpoints.length > 0 &&
     (!cachedMap || verifiedEndpoints.some(e => !cachedMap.endpoints.find(c => c.url === e.url && c.verified)));
@@ -144,7 +131,7 @@ async function runDynamicProviderWithCache(
   return {
     ...liveData,
     _providerSummary: summary,
-    _keyExpiresAt: endpointMap.keyExpiresAt,      // ISO string if found, null if confirmed absent
+    _keyExpiresAt: endpointMap.keyExpiresAt,       // ISO string if found, null if confirmed absent
     _expiryChecked: endpointMap.expiryChecked ?? false, // true if LLM explicitly checked
   };
 }

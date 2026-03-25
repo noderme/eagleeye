@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MOCK_MODE_ENABLED } from "@/lib/config";
-import { runAllProviders, type Credentials } from "@/lib/providers";
+import { runAllProvidersDynamic, type Credentials } from "@/lib/providers-dynamic";
 import { discoverAndRegisterServices } from "@/lib/dynamic-providers";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { credentials, detectedProviders = [] } = await req.json();
+    const { credentials, detectedProviders = [], llmKey } = await req.json();
 
     // Validate credentials object
     if (!credentials || typeof credentials !== "object") {
@@ -32,10 +32,11 @@ export async function POST(req: NextRequest) {
     const domains = credentials.domains || [];
     delete credentials.domains;
 
-    // Use centralized provider fetching function
-    const { providers, domains: domainResults } = await runAllProviders(
+    // All providers go through the same LLM discovery pipeline
+    const { providers, domains: domainResults } = await runAllProvidersDynamic(
       credentials as Credentials,
-      domains
+      domains,
+      llmKey
     );
 
     return NextResponse.json({

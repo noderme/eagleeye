@@ -5,11 +5,15 @@
  * never relies on LLM training knowledge.
  *
  * Flow:
- * 1. Search DuckDuckGo for "{service} REST API documentation"
- * 2. Pick the most likely official docs URL from results
+ * 1. Check KNOWN_DOC_SEEDS for a curated starting URL (avoids landing on overview pages)
+ * 2. If no seed, search DuckDuckGo for "{service} REST API documentation"
  * 3. Fetch the docs page and strip HTML → clean readable text
  * 4. Follow relevant sub-links (e.g. /reference, /api, /endpoints) up to maxPages
  * 5. Return a consolidated text corpus for the LLM to read
+ *
+ * KNOWN_DOC_SEEDS: These are NOT hardcoded fetchers. They are just starting URLs
+ * that point directly to the API reference index page, bypassing marketing/overview
+ * pages that DuckDuckGo often returns. The LLM still reads and extracts everything.
  */
 
 export interface DocFetchResult {
@@ -22,6 +26,55 @@ export interface DocFetchResult {
   /** Whether we found real docs or fell back to guessing */
   fromSearch: boolean;
 }
+
+// ── Known doc seed URLs ───────────────────────────────────────────────────────
+
+/**
+ * Curated starting URLs for well-known services.
+ * Points directly to the API reference/endpoints page, not the marketing overview.
+ * The fetcher will still crawl sub-links from these pages.
+ *
+ * Add entries here when DuckDuckGo consistently returns the wrong page for a service.
+ * This is NOT a hardcoded fetcher — the LLM still reads and extracts everything.
+ */
+const KNOWN_DOC_SEEDS: Record<string, string[]> = {
+  vercel: [
+    "https://vercel.com/docs/rest-api/endpoints",
+    "https://vercel.com/docs/rest-api/endpoints/billing",
+    "https://vercel.com/docs/rest-api/endpoints/usage",
+  ],
+  openai: [
+    "https://platform.openai.com/docs/api-reference",
+    "https://platform.openai.com/docs/api-reference/usage",
+    "https://platform.openai.com/docs/api-reference/billing",
+  ],
+  stripe: [
+    "https://docs.stripe.com/api",
+    "https://docs.stripe.com/api/subscriptions",
+    "https://docs.stripe.com/api/invoices",
+  ],
+  github: [
+    "https://docs.github.com/en/rest",
+    "https://docs.github.com/en/rest/billing",
+    "https://docs.github.com/en/rest/repos/repos",
+  ],
+  anthropic: [
+    "https://docs.anthropic.com/en/api",
+    "https://docs.anthropic.com/en/api/getting-started",
+  ],
+  supabase: [
+    "https://supabase.com/docs/reference/api/introduction",
+    "https://supabase.com/docs/reference/api/usage",
+  ],
+  resend: [
+    "https://resend.com/docs/api-reference/introduction",
+    "https://resend.com/docs/api-reference/emails/send-email",
+  ],
+  twilio: [
+    "https://www.twilio.com/docs/usage/api",
+    "https://www.twilio.com/docs/usage/api/account",
+  ],
+};
 
 // ── HTML → readable text stripper ────────────────────────────────────────────
 
@@ -168,7 +221,6 @@ async function searchForDocsUrl(serviceId: string): Promise<string | null> {
     const html = await res.text();
 
     // Extract result URLs from DuckDuckGo HTML
-    const resultRegex = /class="result__url[^"]*"[^>]*>([^<]+)</gi;
     const linkRegex = /href="\/\/duckduckgo\.com\/l\/\?uddg=([^"&]+)/gi;
     const urls: string[] = [];
 
@@ -262,14 +314,22 @@ export async function fetchApiDocs(
 ): Promise<DocFetchResult> {
   console.log(`[DocFetcher] Searching for API docs: ${serviceId}`);
 
-  // Step 1: Search for the real docs URL
-  let primaryUrl: string | null = await searchForDocsUrl(serviceId);
-  let fromSearch = true;
+  // Step 1: Check known seed URLs first — these point directly to the API reference
+  // index page, bypassing marketing/overview pages that search often returns.
+  const seedUrls = KNOWN_DOC_SEEDS[serviceId.toLowerCase()];
+  let primaryUrl: string | null = seedUrls?.[0] ?? null;
+  let fromSearch = false;
+  let extraSeedUrls: string[] = seedUrls?.slice(1) ?? [];
+
+  if (!primaryUrl) {
+    // Step 2: Search DuckDuckGo for unknown services
+    primaryUrl = await searchForDocsUrl(serviceId);
+    fromSearch = !!primaryUrl;
+  }
 
   if (!primaryUrl) {
     console.log(`[DocFetcher] Search returned no results for ${serviceId}, trying common patterns`);
-    fromSearch = false;
-    // Try common patterns until one works
+    // Step 3: Try common URL patterns as last resort
     const candidates = guessDocsUrls(serviceId);
     for (const candidate of candidates) {
       try {
@@ -299,7 +359,9 @@ export async function fetchApiDocs(
   const fetchedUrls: string[] = [];
   const textParts: string[] = [];
   const visited = new Set<string>();
-  const queue: string[] = [primaryUrl];
+
+  // Seed queue: primary URL first, then any extra seed URLs for this service
+  const queue: string[] = [primaryUrl, ...extraSeedUrls];
 
   while (queue.length > 0 && fetchedUrls.length < maxPages) {
     const url = queue.shift()!;

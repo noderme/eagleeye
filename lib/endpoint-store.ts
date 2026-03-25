@@ -36,7 +36,7 @@ const REFRESH_AFTER_DAYS = 30;
  * Current discovery engine version.
  * Bump this to force re-discovery of ALL services (e.g. when the engine logic changes significantly).
  */
-const CURRENT_DISCOVERY_VERSION = 2;
+const CURRENT_DISCOVERY_VERSION = 4; // v4: removed KNOWN_FETCHERS, all services use LLM discovery with KNOWN_DOC_SEEDS
 
 /**
  * Load a cached endpoint map for a service.

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
 import { createServiceClient } from "@/lib/supabase/service";
 import { decrypt } from "@/lib/crypto";
-import { runAllProviders, type Credentials } from "@/lib/providers";
+import { runAllProvidersDynamic, type Credentials } from "@/lib/providers-dynamic";
 import { fetchAllRepoInsights, type RepoSummary } from "@/lib/github";
 import { runAnalysis, type LLMKey } from "@/lib/analyze";
 
@@ -113,7 +113,7 @@ async function scanUser(userId: string, service: ReturnType<typeof createService
 
   const [githubInsights, { providers, domains: domainResults }] = await Promise.all([
     githubToken && repos.length > 0 ? fetchAllRepoInsights(repos, githubToken) : Promise.resolve([]),
-    runAllProviders(credentials, domains),
+    runAllProvidersDynamic(credentials, domains, llmKey),
   ]);
 
   let analysis = null;
