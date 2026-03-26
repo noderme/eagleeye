@@ -248,10 +248,21 @@ async function callLLMWithTools(
   }
 
   // Gemini — no tool use support in this flow, use text-only
-  const genAI = new GoogleGenerativeAI(llmKey.apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(`${systemPrompt}\n\n${userMessage}`);
-  return result.response.text();
+  try {
+    const genAI = new GoogleGenerativeAI(llmKey.apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const result = await model.generateContent(`${systemPrompt}\n\n${userMessage}`);
+    return result.response.text();
+  } catch (e) {
+    const msg = String(e);
+    if (/API_KEY_INVALID|API key not valid|invalid.*key/i.test(msg)) {
+      throw new Error("Invalid Gemini API key — please update it in Integrations.");
+    }
+    if (/RESOURCE_EXHAUSTED|quota|429/i.test(msg)) {
+      throw new Error("Gemini quota exceeded — free tier is full or rate limited.");
+    }
+    throw new Error(`Gemini error: ${msg.replace(/\[GoogleGenerativeAI Error\]:\s*/i, "").replace(/Error fetching from https?:\/\/[^\s]+:\s*/i, "").slice(0, 120)}`);
+  }
 }
 
 // ── HTTP fetch with timeout ──────────────────────────────────────────────────
@@ -506,27 +517,43 @@ IMPORTANT:
     },
   ];
 
-  const result = await callLLMWithTools(
-    systemPrompt,
-    userMessage,
-    tools,
-    llmKey,
-    async (name, input) => {
-      if (name === "http_get") {
-        try {
-          const res = await fetchWithTimeout(input.url, { headers: input.headers ?? {} }, 10_000);
-          const html = await res.text();
-          // Strip HTML before returning to LLM so it reads clean text
-          const { htmlToText } = await import("./doc-fetcher");
-          return htmlToText(html).slice(0, 8_000);
-        } catch (e) {
-          return `Error fetching ${input.url}: ${String(e)}`;
+  let result: string;
+  try {
+    result = await callLLMWithTools(
+      systemPrompt,
+      userMessage,
+      tools,
+      llmKey,
+      async (name, input) => {
+        if (name === "http_get") {
+          try {
+            const res = await fetchWithTimeout(input.url, { headers: input.headers ?? {} }, 10_000);
+            const html = await res.text();
+            // Strip HTML before returning to LLM so it reads clean text
+            const { htmlToText } = await import("./doc-fetcher");
+            return htmlToText(html).slice(0, 8_000);
+          } catch (e) {
+            return `Error fetching ${input.url}: ${String(e)}`;
+          }
         }
-      }
-      return "Unknown tool";
-    },
-    8 // Fewer turns needed since we already provide the docs
-  );
+        return "Unknown tool";
+      },
+      8 // Fewer turns needed since we already provide the docs
+    );
+  } catch (e) {
+    // LLM call failed (bad key, quota, network) — return empty map so scan continues without crashing
+    console.warn(`[Discovery] LLM call failed for ${serviceId}:`, String(e));
+    return {
+      serviceId,
+      serviceName: serviceId,
+      apiBaseUrl: `https://api.${serviceId}.com`,
+      endpoints: [],
+      discoveredAt: new Date().toISOString(),
+      discoveryVersion: 3,
+      docsUrl: docResult.docsUrl,
+      docsFromSearch: docResult.fromSearch,
+    };
+  }
 
   // ── Step 4: Parse LLM response ────────────────────────────────────────────
   try {
@@ -926,9 +953,9 @@ Extract all useful monitoring information and return the JSON summary.`;
     } else {
       // Gemini fallback — text only
       const genAI = new GoogleGenerativeAI(llmKey.apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const result = await model.generateContent(`${systemPrompt}\n\n${userMessage}\n\nReturn ONLY the JSON, no other text.`);
-      jsonText = result.response.text();
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const geminiResult = await model.generateContent(`${systemPrompt}\n\n${userMessage}\n\nReturn ONLY the JSON, no other text.`);
+      jsonText = geminiResult.response.text();
     }
 
     // Extract JSON from response (handle markdown code blocks)

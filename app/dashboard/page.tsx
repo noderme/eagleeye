@@ -111,6 +111,7 @@ export default function DashboardPage() {
         const saved = saveRes.ok ? (await saveRes.json()).result : fresh;
         setCachedScan(saved);
         setResult(saved);
+        window.dispatchEvent(new CustomEvent("eagleeye:scan-complete"));
       }
     } finally {
       clearInterval(interval);

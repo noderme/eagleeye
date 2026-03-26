@@ -109,13 +109,24 @@ async function callLLM(systemPrompt: string, userContent: string, llmKey: LLMKey
   }
 
   if (llmKey.provider === "gemini") {
-    const genAI = new GoogleGenerativeAI(llmKey.apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const result = await model.generateContent({
-      systemInstruction: systemPrompt,
-      contents: [{ role: "user", parts: [{ text: userContent }] }],
-    });
-    return result.response.text();
+    try {
+      const genAI = new GoogleGenerativeAI(llmKey.apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const result = await model.generateContent({
+        systemInstruction: systemPrompt,
+        contents: [{ role: "user", parts: [{ text: userContent }] }],
+      });
+      return result.response.text();
+    } catch (e) {
+      const msg = String(e);
+      if (/API_KEY_INVALID|API key not valid|invalid.*key/i.test(msg)) {
+        throw new Error("Invalid Gemini API key — please update it in Integrations.");
+      }
+      if (/RESOURCE_EXHAUSTED|quota|429/i.test(msg)) {
+        throw new Error("Gemini quota exceeded — free tier is full or rate limited.");
+      }
+      throw new Error(`Gemini error: ${msg.replace(/\[GoogleGenerativeAI Error\]:\s*/i, "").replace(/Error fetching from https?:\/\/[^\s]+:\s*/i, "").slice(0, 120)}`);
+    }
   }
 
   // Ollama: OpenAI-compatible local endpoint

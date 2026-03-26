@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard, Zap, KeyRound, Puzzle, Lightbulb,
@@ -28,8 +28,35 @@ export function Sidebar() {
   const [userInitials, setUserInitials] = useState<string>("—");
   const [badges, setBadges] = useState<Badges>({ alerts: 0, keyHygiene: 0, integrations: 0 });
 
+  const loadBadges = useCallback(async () => {
+    const [statusRes, scanRes] = await Promise.all([
+      fetch("/api/keys/status"),
+      fetch("/api/scan/results"),
+    ]);
+
+    const status = statusRes.ok ? await statusRes.json() : {};
+    const scan = scanRes.ok ? await scanRes.json() : {};
+
+    const integrations = (status.integrations ?? []).length + (status.githubConnected ? 1 : 0);
+
+    const now = Date.now();
+    const keyHygiene = (status.integrations ?? []).filter((i: any) => {
+      const exp = i.extra_config?.keyExpiresAt;
+      if (!exp) return false;
+      return (new Date(exp).getTime() - now) / 86400000 <= 30;
+    }).length;
+
+    const insights: any[] = scan.result?.github_data ?? [];
+    const scanDomains: any[] = scan.result?.domain_data ?? [];
+    const failingCI = insights.filter((i: any) => i.ciRuns?.[0]?.conclusion === "failure").length;
+    const riskyFiles = insights.reduce((acc: number, i: any) => acc + (i.riskyFiles?.length ?? 0), 0);
+    const urgentDomains = scanDomains.filter((d: any) => d.daysLeft !== null && d.daysLeft <= 30).length;
+
+    setBadges({ alerts: failingCI + riskyFiles + urgentDomains, keyHygiene, integrations });
+  }, []);
+
   useEffect(() => {
-    async function load() {
+    async function loadUser() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -41,38 +68,15 @@ export function Sidebar() {
           : name.slice(0, 2).toUpperCase()
         );
       }
-
-      const [statusRes, scanRes] = await Promise.all([
-        fetch("/api/keys/status"),
-        fetch("/api/scan/results"),
-      ]);
-
-      const status = statusRes.ok ? await statusRes.json() : {};
-      const scan = scanRes.ok ? await scanRes.json() : {};
-
-      const integrations = (status.integrations ?? []).length + (status.githubConnected ? 1 : 0);
-
-      // Key hygiene: keys with an expiry set that expires within 30 days, or with errors
-      const now = Date.now();
-      const keyHygiene = (status.integrations ?? []).filter((i: any) => {
-        const exp = i.extra_config?.keyExpiresAt;
-        if (!exp) return false;
-        return (new Date(exp).getTime() - now) / 86400000 <= 30;
-      }).length;
-
-      // Alerts: real alerts only — no AI recommendations (those live on Recommendations page)
-      // failingCI + riskyFiles + urgent domains (<=30 days)
-      const insights: any[] = scan.result?.github_data ?? [];
-      const scanDomains: any[] = scan.result?.domain_data ?? [];
-      const failingCI = insights.filter((i: any) => i.ciRuns?.[0]?.conclusion === "failure").length;
-      const riskyFiles = insights.reduce((acc: number, i: any) => acc + (i.riskyFiles?.length ?? 0), 0);
-      const urgentDomains = scanDomains.filter((d: any) => d.daysLeft !== null && d.daysLeft <= 30).length;
-      const alerts = failingCI + riskyFiles + urgentDomains;
-
-      setBadges({ alerts, keyHygiene, integrations });
     }
-    load();
-  }, []);
+    loadUser();
+    loadBadges();
+  }, [loadBadges]);
+
+  useEffect(() => {
+    window.addEventListener("eagleeye:scan-complete", loadBadges);
+    return () => window.removeEventListener("eagleeye:scan-complete", loadBadges);
+  }, [loadBadges]);
 
   const nav = [
     {

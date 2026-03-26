@@ -13,21 +13,39 @@ export const maxDuration = 300; // 5 min — needed for Claude + GitHub in produ
 const HISTORY_SCANS = 7;
 
 export async function POST() {
-  // In mock mode, return complete mock scan data without requiring authentication
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   if (MOCK_MODE_ENABLED) {
     console.log("[Eagle Eye] Mock mode: returning mock scan trigger results");
-    // Simulate a brief delay to make the scanning animation visible
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const mockResult = getMockScanResult();
     return NextResponse.json({ result: mockResult });
   }
 
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const service = createServiceClient();
+
+    // Rate limit: one scan per 60 seconds per user
+    const { data: lastScan } = await service
+      .from("scan_results")
+      .select("scanned_at")
+      .eq("user_id", user.id)
+      .order("scanned_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lastScan) {
+      const secondsAgo = (Date.now() - new Date(lastScan.scanned_at).getTime()) / 1000;
+      if (secondsAgo < 60) {
+        return NextResponse.json(
+          { error: `Please wait ${Math.ceil(60 - secondsAgo)} seconds before scanning again` },
+          { status: 429 }
+        );
+      }
+    }
 
     // Get GitHub token
     const { data: ghRow } = await service
@@ -79,22 +97,21 @@ export async function POST() {
     const credentials: Credentials = {};
     const domains: string[] = [];
     const keyMeta: Record<string, Record<string, any> | null> = {};
-    let llmKey: LLMKey | undefined;
+
+    // Collect all LLM keys first, then pick by priority below
+    const llmKeys: Partial<Record<string, LLMKey>> = {};
 
     for (const row of keyRows ?? []) {
       const value = JSON.parse(decrypt(row.ciphertext, row.iv));
-      // Extract LLM keys — these power analysis, not provider data fetching
       if (row.provider === "llm_openai") {
-        llmKey = { provider: "openai", apiKey: value.key };
+        llmKeys.openai = { provider: "openai", apiKey: value.key };
       } else if (row.provider === "llm_anthropic") {
-        llmKey = llmKey ?? { provider: "anthropic", apiKey: value.key }; // openai takes priority if both set
+        llmKeys.anthropic = { provider: "anthropic", apiKey: value.key };
       } else if (row.provider === "llm_gemini") {
-        llmKey = llmKey ?? { provider: "gemini", apiKey: value.key };
+        llmKeys.gemini = { provider: "gemini", apiKey: value.key };
       } else if (row.provider === "llm_ollama") {
-        // For Ollama, the "key" field stores the base URL
-        // Pass it directly through LLMKey — do NOT use process.env mutation (unreliable in Next.js)
         const ollamaUrl = value.key?.trim() || "http://localhost:11434";
-        llmKey = llmKey ?? { provider: "ollama", apiKey: "ollama", baseURL: ollamaUrl };
+        llmKeys.ollama = { provider: "ollama", apiKey: "ollama", baseURL: ollamaUrl };
       } else if (row.provider === "domains") {
         domains.push(...(row.extra_config?.domains ?? []));
       } else {
@@ -102,6 +119,11 @@ export async function POST() {
         keyMeta[row.provider] = row.extra_config ?? null;
       }
     }
+
+    // Pick LLM key by priority: Ollama > Anthropic > OpenAI > Gemini
+    // This respects the user's explicit choice — self-hosted (Ollama) always wins
+    const llmKey: LLMKey | undefined =
+      llmKeys.ollama ?? llmKeys.anthropic ?? llmKeys.openai ?? llmKeys.gemini;
 
     // Fetch all data in parallel
     const [githubInsights, { providers, domains: domainResults }] = await Promise.all([

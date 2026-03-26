@@ -20,6 +20,7 @@ import { runDynamicProvider, type LiveProviderData, type ProviderSummary } from 
 import { loadEndpointMap, saveEndpointMap } from "@/lib/endpoint-store";
 import { MOCK_MODE_ENABLED } from "@/lib/config";
 import { getMockProvider } from "@/lib/mock-providers";
+import { friendlyError } from "@/lib/errors";
 import type { LLMKey } from "@/lib/analyze";
 
 export type { Credentials };
@@ -75,9 +76,9 @@ export async function runAllProvidersDynamic(
         ? result.value
         : {
             provider: keys[i],
-            error: String((result as PromiseRejectedResult).reason),
-            _summary: `${keys[i]} — error`,
-            _signal: String((result as PromiseRejectedResult).reason),
+            error: friendlyError((result as PromiseRejectedResult).reason),
+            _summary: `${keys[i]} — scan error`,
+            _signal: friendlyError((result as PromiseRejectedResult).reason),
             _status: "warn",
           };
   });

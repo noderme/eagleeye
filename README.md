@@ -2,7 +2,7 @@
 
 **AI-powered infrastructure intelligence for developers.**
 
-![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
 ![Supabase](https://img.shields.io/badge/Supabase-auth%20%2B%20db-green?logo=supabase)
 ![License](https://img.shields.io/badge/license-MIT-blue)
@@ -35,7 +35,7 @@ Eagle Eye asks you to connect your most sensitive keys. You should be able to re
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 15, Tailwind CSS, TypeScript |
+| Frontend | Next.js 16, Tailwind CSS, TypeScript |
 | Backend | Next.js API routes (serverless) |
 | Database | Supabase (PostgreSQL) |
 | Auth | Supabase Auth + GitHub OAuth |
