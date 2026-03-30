@@ -307,7 +307,14 @@ Sort: critical first, then warning, saving, info. Max 15 total.`;
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("Could not parse Claude response as JSON");
 
-  const parsed = JSON.parse(jsonMatch[0]) as AnalysisResult;
+  // Sanitize common local-LLM JSON mistakes before parsing:
+  // 1. Unquoted ISO dates: "deadline": ISO 2024-01-15 → "deadline": "ISO 2024-01-15"
+  // 2. Trailing commas before } or ]
+  const sanitized = jsonMatch[0]
+    .replace(/:\s*(ISO\s[\d\-T:.Z]+)/g, ': "$1"')
+    .replace(/,(\s*[}\]])/g, "$1");
+
+  const parsed = JSON.parse(sanitized) as AnalysisResult;
 
   // Deduplicate: if a provider already has a warning/critical rec, drop plan-fit info for it
   const SEVERITY_RANK: Record<string, number> = { critical: 3, warning: 2, saving: 1, info: 0 };
