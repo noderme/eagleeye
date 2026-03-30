@@ -610,7 +610,7 @@ export default function IntegrationsPage() {
               </button>
             </div>
             <p className="text-[11px] text-muted -mt-1">
-              Eagle Eye found these providers in your code. Connect them to enable monitoring.
+              Eagle Eye found these providers in your code. Not monitored — potential blind spot.
             </p>
             {detectedNotConnected.map(p => renderProviderCard(p))}
             {detectedUnknown.map(id => (
@@ -626,7 +626,7 @@ export default function IntegrationsPage() {
                         Detected
                       </span>
                     </div>
-                    <p className="text-[11px] text-muted mt-0.5">Found in your repo env vars — add as custom integration to enable monitoring.</p>
+                    <p className="text-[11px] text-muted mt-0.5">Found in your repo env vars — not monitored, potential blind spot.</p>
                   </div>
                   <button
                     onClick={() => setCustomForm({ name: id, fields: [{ key: "apiKey", value: "" }] })}
@@ -711,7 +711,7 @@ export default function IntegrationsPage() {
             <div>
               <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted">Custom integrations</h2>
               <p className="text-[11px] text-muted/60 mt-0.5">
-                Any service Eagle Eye doesn't know yet — Claude will research its API and fetch data automatically.
+                Any service Eagle Eye doesn't know yet — add your credentials and it will be monitored automatically.
               </p>
             </div>
           </div>
@@ -804,7 +804,7 @@ export default function IntegrationsPage() {
               </div>
 
               <p className="text-[10px] text-muted/70">
-                During the next scan, Claude will research this provider's API docs and fetch plan, usage, and health data using these credentials.
+                During the next scan, Eagle Eye will fetch plan, usage, and health data using these credentials.
               </p>
 
               <div className="flex items-center gap-2">

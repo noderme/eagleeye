@@ -200,11 +200,6 @@ export default function LandingPage() {
           <span className="text-[15px] font-bold text-text tracking-wide">Eagle Eye</span>
         </div>
         <div className="flex items-center gap-4">
-          <a href="https://github.com/noderme/eagleeye" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-[12px] text-muted hover:text-text transition-colors">
-            <Github className="w-4 h-4" />
-            Open source
-          </a>
           <button
             onClick={connectGitHub}
             disabled={loading}
@@ -338,17 +333,22 @@ export default function LandingPage() {
               {
                 step: "01",
                 title: "Connect GitHub",
-                desc: "Sign in with GitHub OAuth. Eagle Eye gets read-only access to your repos — no code is stored, no webhooks installed.",
+                desc: "Sign in with GitHub OAuth. Eagle Eye gets read-only access to your repos — no code stored, no webhooks installed.",
               },
               {
                 step: "02",
-                title: "Add your tools",
-                desc: "Paste in API keys for OpenAI, Stripe, Vercel, Supabase, Twilio, Resend — any combination. Eagle Eye encrypts and stores them securely.",
+                title: "Eagle Eye reads your stack automatically",
+                desc: "Eagle Eye scans your package.json, pom.xml, build.gradle, requirements.txt, go.mod, Gemfile, and .env files to detect which services you use — Stripe, OpenAI, Vercel, Supabase, and more. Works across Node.js, Python, Go, Ruby, Java, and Kotlin. No manual config.",
               },
               {
                 step: "03",
-                title: "Get your report",
-                desc: "Eagle Eye scans everything, runs AI analysis across all signals, and surfaces prioritised recommendations — sorted by what needs immediate action.",
+                title: "Connect your API keys",
+                desc: "Eagle Eye shows exactly which services it found. Add your API keys — it then queries their APIs directly for usage, billing, limits, and health data. Keys are encrypted at rest.",
+              },
+              {
+                step: "04",
+                title: "Get your risk summary — before something breaks",
+                desc: "One dashboard. Critical failures, expiring keys, overspending, services nearing limits. Prioritised by impact, not a wall of logs.",
               },
             ].map(({ step, title, desc }) => (
               <div key={step} className="flex items-start gap-6 bg-surface border border-border rounded-2xl p-6">

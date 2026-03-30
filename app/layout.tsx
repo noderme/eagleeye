@@ -6,7 +6,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Eagle Eye — Infrastructure AI",
+  title: "Eagle Eye — Prevent outages & overspending in your APIs",
   description: "AI-powered infrastructure monitoring, key hygiene, and cost intelligence.",
 };
 

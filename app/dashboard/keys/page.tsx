@@ -24,13 +24,39 @@ function daysUntil(iso: string): number {
 }
 
 const PROVIDER_META: Record<string, { name: string; emoji: string }> = {
-  github:  { name: "GitHub",  emoji: "🐙" },
-  openai:  { name: "OpenAI",  emoji: "🤖" },
-  stripe:  { name: "Stripe",  emoji: "💳" },
-  vercel:  { name: "Vercel",  emoji: "▲"  },
-  resend:  { name: "Resend",  emoji: "📧" },
-  twilio:  { name: "Twilio",  emoji: "📱" },
-  domains: { name: "Domains", emoji: "🌐" },
+  github:    { name: "GitHub",    emoji: "🐙" },
+  openai:    { name: "OpenAI",    emoji: "🤖" },
+  stripe:    { name: "Stripe",    emoji: "💳" },
+  vercel:    { name: "Vercel",    emoji: "▲"  },
+  resend:    { name: "Resend",    emoji: "📧" },
+  twilio:    { name: "Twilio",    emoji: "📱" },
+  anthropic: { name: "Anthropic", emoji: "🧠" },
+  supabase:  { name: "Supabase",  emoji: "⚡" },
+  domains:   { name: "Domains",   emoji: "🌐" },
+};
+
+const PROVIDER_INSIGHTS: Record<string, string> = {
+  stripe:    "No usage tracking — billing risk unknown",
+  openai:    "No spend cap check — runaway costs possible",
+  anthropic: "Token usage not tracked — cost unknown",
+  github:    "CI failures detected — real-time alerts not set",
+  vercel:    "Bandwidth limits not monitored",
+  resend:    "Email quota not tracked",
+  twilio:    "SMS spend not monitored",
+  supabase:  "Storage limits not checked",
+  domains:   "Expiry monitored — SSL not checked",
+};
+
+const PROVIDER_CONSEQUENCES: Record<string, string> = {
+  stripe:    "Payments may fail after expiry",
+  openai:    "AI features will stop responding",
+  anthropic: "AI features will stop responding",
+  github:    "CI/CD and repo access will break",
+  vercel:    "Deployments will stop working",
+  resend:    "Email delivery will stop",
+  twilio:    "SMS and calls will stop",
+  supabase:  "Database access will be lost",
+  domains:   "Site may go offline after expiry",
 };
 
 export default function KeysPage() {
@@ -93,14 +119,26 @@ export default function KeysPage() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[13px] font-semibold text-text">{meta.name}</div>
+          {PROVIDER_INSIGHTS[integration.provider] && (
+            <div className="text-[11px] text-muted/50 mt-0.5">{PROVIDER_INSIGHTS[integration.provider]}</div>
+          )}
           {typeof expiresAt === "string" ? (
-            <div className="text-[11px] text-muted mt-0.5 font-mono">
-              Expires {new Date(expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            <div className="mt-0.5">
+              <div className="text-[11px] text-muted font-mono">
+                Expires {new Date(expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </div>
+              {days !== null && days <= 30 && PROVIDER_CONSEQUENCES[integration.provider] && (
+                <div className={clsx("text-[11px] mt-0.5", days <= 7 ? "text-red" : "text-amber")}>
+                  {days < 0
+                    ? `${PROVIDER_CONSEQUENCES[integration.provider]} — key has expired`
+                    : `${PROVIDER_CONSEQUENCES[integration.provider]} in ${days} day${days !== 1 ? "s" : ""}`}
+                </div>
+              )}
             </div>
           ) : isConfirmedNoExpiry ? (
             <div className="text-[11px] text-muted/40 mt-0.5">Keys do not expire for this service</div>
           ) : (
-            <div className="text-[11px] text-muted/50 mt-0.5">Expiry unknown — run a scan to detect</div>
+            <div className="text-[11px] text-muted/50 mt-0.5">⚪ Scan to detect expiry</div>
           )}
         </div>
         <div className="flex-shrink-0">
@@ -122,7 +160,7 @@ export default function KeysPage() {
 
   return (
     <>
-      <Topbar title="Key Hygiene" alerts={issues} />
+      <Topbar title="API Key Health" alerts={issues} />
       <main className="flex-1 overflow-y-auto p-7 flex flex-col gap-6">
 
         {loading && (
@@ -136,9 +174,9 @@ export default function KeysPage() {
         {!loading && (
           <div className="grid grid-cols-3 gap-3.5">
             {[
-              { label: "Expired",       value: expired.length,      color: expired.length > 0 ? "text-red" : "text-green",   dot: expired.length > 0 ? "bg-red pulse-red" : "bg-green" },
-              { label: "Expiring soon", value: expiringSoon.length,  color: expiringSoon.length > 0 ? "text-amber" : "text-green", dot: expiringSoon.length > 0 ? "bg-amber" : "bg-green" },
-              { label: "Unknown expiry", value: unknownExpiry.length, color: unknownExpiry.length > 0 ? "text-amber" : "text-muted", dot: unknownExpiry.length > 0 ? "bg-amber" : "bg-muted" },
+              { label: "Expired",          value: expired.length,       color: expired.length > 0 ? "text-red" : "text-green",   dot: expired.length > 0 ? "bg-red pulse-red" : "bg-green" },
+              { label: "Expiring soon",    value: expiringSoon.length,  color: expiringSoon.length > 0 ? "text-amber" : "text-green", dot: expiringSoon.length > 0 ? "bg-amber" : "bg-green" },
+              { label: "Scan to detect",   value: unknownExpiry.length,  color: "text-muted",                                          dot: "bg-muted" },
             ].map(({ label, value, color, dot }) => (
               <div key={label} className="bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
@@ -165,10 +203,17 @@ export default function KeysPage() {
         {/* Expiring soon */}
         {expiringSoon.length > 0 && (
           <section className="flex flex-col gap-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-amber flex items-center gap-2">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Expiring within 30 days
-            </h2>
+            {expiringSoon.some(i => daysUntil(i.extra_config!.keyExpiresAt as string) <= 7) ? (
+              <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-red flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                🔴 Expiring within 7 days — rotate now
+              </h2>
+            ) : (
+              <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-amber flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                🟡 Expiring within 30 days
+              </h2>
+            )}
             {expiringSoon.map(i => <KeyCard key={i.provider} integration={i} />)}
           </section>
         )}
@@ -203,10 +248,10 @@ export default function KeysPage() {
           <section className="flex flex-col gap-3">
             <h2 className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-muted" />
-              Expiry unknown
+              ⚪ Not yet scanned — run a scan to detect
             </h2>
             <p className="text-[12px] text-muted -mt-1">
-              Run a scan to auto-detect expiry, or set it manually on the{" "}
+              Eagle Eye will auto-detect expiry dates on next scan, or set manually on the{" "}
               <a href="/dashboard/integrations" className="text-cyan hover:underline">Integrations</a>{" "}
               page.
             </p>

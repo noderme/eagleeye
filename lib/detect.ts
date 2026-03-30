@@ -7,23 +7,26 @@ interface TreeFile {
 }
 
 interface ProviderSignals {
-  paths?: RegExp[];    // match file paths
-  envKeys?: RegExp[];  // match .env.example / env keys
-  packages?: string[]; // match package.json / requirements.txt / go.mod / Gemfile / pyproject.toml
-  imports?: RegExp[];  // match import statements in source files
+  paths?: RegExp[];         // match file paths
+  envKeys?: RegExp[];       // match .env.example / env keys
+  packages?: string[];      // match package.json / requirements.txt / go.mod / Gemfile / pyproject.toml
+  javaPackages?: string[];  // match pom.xml artifactId / build.gradle dependency strings
+  imports?: RegExp[];       // match import statements in source files
 }
 
 // Add a new entry here to detect any new provider — no types to update anywhere else.
 const PROVIDER_SIGNALS: Record<string, ProviderSignals> = {
   openai: {
     packages: ["openai", "langchain", "litellm"],
+    javaPackages: ["openai-java", "openai"],
     envKeys: [/OPENAI_API_KEY/i, /OPENAI_ORG/i],
-    imports: [/from ['"]openai['"]/i, /require\(['"]openai['"]\)/i],
+    imports: [/from ['"]openai['"]/i, /require\(['"]openai['"]\)/i, /import com\.openai/],
   },
   anthropic: {
     packages: ["@anthropic-ai/sdk", "anthropic"],
+    javaPackages: ["anthropic-java", "anthropic"],
     envKeys: [/ANTHROPIC_API_KEY/i],
-    imports: [/from ['"]@anthropic-ai\/sdk['"]/i, /require\(['"]@anthropic-ai\/sdk['"]\)/i, /from ['"]anthropic['"]/i],
+    imports: [/from ['"]@anthropic-ai\/sdk['"]/i, /require\(['"]@anthropic-ai\/sdk['"]\)/i, /from ['"]anthropic['"]/i, /import com\.anthropic/],
   },
   supabase: {
     packages: ["@supabase/supabase-js", "@supabase/ssr", "@supabase/auth-helpers-nextjs", "@supabase/auth-helpers-react"],
@@ -32,8 +35,9 @@ const PROVIDER_SIGNALS: Record<string, ProviderSignals> = {
   },
   stripe: {
     packages: ["stripe", "@stripe/stripe-js", "@stripe/react-stripe-js"],
+    javaPackages: ["stripe-java", "stripe"],
     envKeys: [/STRIPE_SECRET_KEY/i, /STRIPE_PUBLISHABLE_KEY/i, /STRIPE_WEBHOOK/i, /NEXT_PUBLIC_STRIPE/i],
-    imports: [/from ['"]stripe['"]/i, /require\(['"]stripe['"]\)/i],
+    imports: [/from ['"]stripe['"]/i, /require\(['"]stripe['"]\)/i, /import com\.stripe/],
   },
   vercel: {
     packages: ["@vercel/analytics", "@vercel/og", "@vercel/speed-insights", "vercel"],
@@ -47,8 +51,9 @@ const PROVIDER_SIGNALS: Record<string, ProviderSignals> = {
   },
   twilio: {
     packages: ["twilio"],
+    javaPackages: ["twilio-java", "twilio"],
     envKeys: [/TWILIO_ACCOUNT_SID/i, /TWILIO_AUTH_TOKEN/i, /TWILIO_PHONE/i],
-    imports: [/from ['"]twilio['"]/i, /require\(['"]twilio['"]\)/i],
+    imports: [/from ['"]twilio['"]/i, /require\(['"]twilio['"]\)/i, /import com\.twilio/],
   },
   // Add more providers here — no other files need changing
 };
@@ -80,6 +85,7 @@ export async function detectProviders(
     "package.json",
     "requirements.txt", "go.mod", "Gemfile",
     "pyproject.toml", "Pipfile",
+    "pom.xml", "build.gradle", "build.gradle.kts",
   ];
 
   const presentKeyFiles = KEY_FILES.filter(f => filePaths.includes(f));
@@ -106,6 +112,18 @@ export async function detectProviders(
       continue;
     }
 
+    // 2b. Java package match in pom.xml (<artifactId>) and build.gradle (dependency string)
+    if (signals.javaPackages?.some(pkg => {
+      const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return (
+        new RegExp(`<artifactId>${escaped}</artifactId>`).test(allContent) ||
+        new RegExp(`['"](com\\.\\w+[.:])?${escaped}['":]`).test(allContent)
+      );
+    })) {
+      detected.add(provider);
+      continue;
+    }
+
     // 3. Env key match in .env.example etc
     if (signals.envKeys?.some(r => r.test(allContent))) {
       detected.add(provider);
@@ -115,7 +133,7 @@ export async function detectProviders(
     // 4. Import statement match — scan source files (sample: first 20 .ts/.js/.py/.rb files)
     if (signals.imports) {
       const sourceFiles = filePaths
-        .filter(f => /\.(ts|tsx|js|jsx|py|rb)$/.test(f) && !f.includes("node_modules"))
+        .filter(f => /\.(ts|tsx|js|jsx|py|rb|java|kt)$/.test(f) && !f.includes("node_modules"))
         .slice(0, 50);
 
       for (const file of sourceFiles) {

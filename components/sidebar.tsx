@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard, Zap, KeyRound, Puzzle, Lightbulb,
-  TrendingUp, ShieldCheck, Settings, Eye,
+  TrendingUp, ShieldCheck, Settings, Eye, Home,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -99,7 +99,8 @@ export function Sidebar() {
     {
       section: "Settings",
       items: [
-        { label: "Settings", href: "/dashboard/settings", icon: Settings },
+        { label: "Settings",  href: "/dashboard/settings", icon: Settings },
+        { label: "Main page", href: "/",                   icon: Home },
       ],
     },
   ];
@@ -113,7 +114,7 @@ export function Sidebar() {
         </div>
         <div className="flex flex-col leading-tight">
           <span className="text-sm font-bold text-text tracking-wide">Eagle Eye</span>
-          <span className="text-[9px] font-semibold text-cyan tracking-[2px] uppercase">Infrastructure AI</span>
+          <span className="text-[9px] font-semibold text-cyan tracking-[1px]">Prevent outages &amp; overspending in your APIs</span>
         </div>
       </div>
 

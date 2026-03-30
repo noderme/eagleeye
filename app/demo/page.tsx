@@ -295,11 +295,6 @@ export default function DemoPage() {
   const [view, setView] = useState<keyof typeof VIEWS>("overview");
   const ViewComponent = VIEWS[view].component;
 
-  const sidebarActive: Record<string, string> = {
-    overview:        "#overview",
-    recommendations: "#recs",
-  };
-
   return (
     <div className="flex h-screen bg-bg overflow-hidden">
 
@@ -320,7 +315,7 @@ export default function DemoPage() {
             </div>
             <div className="flex flex-col leading-tight">
               <span className="text-sm font-bold text-text tracking-wide">Eagle Eye</span>
-              <span className="text-[9px] font-semibold text-cyan tracking-[2px] uppercase">Infrastructure AI</span>
+              <span className="text-[9px] font-semibold text-cyan tracking-[1px]">Prevent outages &amp; overspending in your APIs</span>
             </div>
           </div>
 

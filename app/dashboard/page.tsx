@@ -58,9 +58,24 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
+  const [expiringKeysCount, setExpiringKeysCount] = useState<number | null>(null);
 
   useEffect(() => {
     loadLatest();
+    fetch("/api/keys/status")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        const integrations: Array<{ extra_config?: { keyExpiresAt?: string | null } }> = data.integrations ?? [];
+        const count = integrations.filter(i => {
+          const exp = i.extra_config?.keyExpiresAt;
+          if (!exp) return false;
+          const days = Math.ceil((new Date(exp).getTime() - Date.now()) / 86400000);
+          return days >= 0 && days <= 30;
+        }).length;
+        setExpiringKeysCount(count);
+      })
+      .catch(() => {});
   }, []);
 
   async function loadLatest() {
@@ -129,14 +144,13 @@ export default function DashboardPage() {
   const recommendations: Recommendation[] = analysis?.recommendations ?? [];
 
   const failingCI = insights.filter(i => i.ciRuns[0]?.conclusion === "failure").length;
-  const totalOpenPRs = insights.reduce((s, i) => s + i.openPRs, 0);
+
   const riskyRepos = insights.filter(i => i.riskyFiles.length > 0).length;
   // criticalAlerts must match EXACTLY what the Alerts page shows:
   // failingCI + repos with risky files + domains expiring within 30 days
   // Recommendations are NOT counted here — they live on the Recommendations page
   const urgentDomains = domains.filter((d: any) => d.daysLeft !== null && d.daysLeft <= 30);
   const criticalAlerts = failingCI + riskyRepos + urgentDomains.length;
-  const servicesMonitored = Object.keys(providers).length;
 
   const isActive = loading || scanning;
 
@@ -149,6 +163,13 @@ export default function DashboardPage() {
       dynamicProviderSummaries.push(d._providerSummary as ProviderSummary);
     }
   }
+
+  const costWasteCount = dynamicProviderSummaries.filter(s =>
+    s.groups.some(g => (g.category === "billing" || g.category === "warnings") && g.items.length > 0)
+  ).length;
+  const usageNearingLimitCount = dynamicProviderSummaries.filter(s =>
+    s.groups.some(g => g.category === "limits" && g.items.length > 0)
+  ).length;
   // Fallback cards for providers that returned data but no _providerSummary (e.g. credential errors, no LLM key)
   type ProviderCard = { id: string; emoji: string; label: string; value: string; sub: string; color: string; extra?: React.ReactNode };
   const providerCards: ProviderCard[] = [];
@@ -244,13 +265,15 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <p className="text-[12px] font-mono text-cyan truncate">
+                <p className={`text-[12px] font-mono truncate ${result && !loading && criticalAlerts > 0 ? "text-red" : "text-cyan"}`}>
                   {loading
                     ? "▸ Loading last scan..."
                     : analysis?.summary
                       ? `▸ ${analysis.summary}`
                       : result
-                        ? `▸ ${insights.length} repo${insights.length !== 1 ? "s" : ""} monitored · ${criticalAlerts} issue${criticalAlerts !== 1 ? "s" : ""} detected`
+                        ? criticalAlerts > 0
+                          ? `🚨 ${criticalAlerts} Critical Risk${criticalAlerts !== 1 ? "s" : ""} Detected — Your app may break due to integration issues`
+                          : `▸ ${insights.length} repo${insights.length !== 1 ? "s" : ""} monitored · No critical issues`
                         : "▸ No scan yet — run your first scan to get started"
                   }
                 </p>
@@ -279,10 +302,10 @@ export default function DashboardPage() {
         {/* ── STAT CARDS ── */}
         <div className="grid grid-cols-4 gap-3.5">
           {[
-            { label: "Failing CI",   value: loading ? "—" : String(failingCI),   color: failingCI > 0 ? "text-red" : "text-green",   glow: failingCI > 0 ? "shadow-[0_0_20px_rgba(255,68,68,0.12)]" : "", sub: "Workflow runs",         dot: failingCI > 0 ? "bg-red pulse-red" : "bg-green" },
-            { label: "Open PRs",     value: loading ? "—" : String(totalOpenPRs), color: "text-amber",  glow: "", sub: "Across all repos",      dot: "bg-amber" },
-            { label: "Secret Risk",  value: loading ? "—" : String(riskyRepos),  color: riskyRepos > 0 ? "text-red" : "text-green",   glow: riskyRepos > 0 ? "shadow-[0_0_20px_rgba(255,68,68,0.12)]" : "", sub: "Repos with risky files", dot: riskyRepos > 0 ? "bg-red pulse-red" : "bg-green" },
-            { label: "Services",     value: loading ? "—" : String(servicesMonitored), color: "text-cyan", glow: "shadow-[0_0_20px_rgba(0,212,255,0.08)]", sub: "Integrations monitored", dot: "bg-cyan" },
+            { label: "🔴 Critical Risks",       value: loading ? "—" : String(criticalAlerts),        color: criticalAlerts > 0 ? "text-red" : "text-green",   glow: criticalAlerts > 0 ? "shadow-[0_0_20px_rgba(255,68,68,0.12)]" : "", sub: "Failing CI · secrets · domains",  dot: criticalAlerts > 0 ? "bg-red pulse-red" : "bg-green" },
+            { label: "⚠️ Expiring Keys",        value: loading || expiringKeysCount === null ? "—" : String(expiringKeysCount), color: (expiringKeysCount ?? 0) > 0 ? "text-amber" : "text-green", glow: (expiringKeysCount ?? 0) > 0 ? "shadow-[0_0_20px_rgba(255,180,0,0.10)]" : "", sub: "API keys expiring in 30 days",   dot: (expiringKeysCount ?? 0) > 0 ? "bg-amber" : "bg-green" },
+            { label: "💸 Cost Waste",            value: loading ? "—" : String(costWasteCount),         color: costWasteCount > 0 ? "text-amber" : "text-green",  glow: costWasteCount > 0 ? "shadow-[0_0_20px_rgba(255,180,0,0.10)]" : "", sub: "Providers with billing signals",  dot: costWasteCount > 0 ? "bg-amber" : "bg-green" },
+            { label: "📊 Usage Near Limit",     value: loading ? "—" : String(usageNearingLimitCount), color: usageNearingLimitCount > 0 ? "text-amber" : "text-green", glow: usageNearingLimitCount > 0 ? "shadow-[0_0_20px_rgba(255,180,0,0.10)]" : "", sub: "Providers near quota",          dot: usageNearingLimitCount > 0 ? "bg-amber" : "bg-green" },
           ].map(({ label, value, color, glow, sub, dot }) => (
             <div key={label} className={clsx("bg-surface border border-border rounded-2xl p-5 flex flex-col gap-3", glow)}>
               <div className="flex items-center justify-between">
@@ -294,6 +317,46 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* ── DAILY RISK SUMMARY ── */}
+        {!loading && !scanning && result && (
+          <div className="bg-surface border border-border rounded-2xl px-5 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[1.2px] text-muted">Today's Risk Summary</span>
+              <span className="text-[10px] text-muted/50 font-mono">
+                {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-muted">🔴 Critical issues</span>
+                <span className={clsx("text-[13px] font-bold font-mono", criticalAlerts > 0 ? "text-red" : "text-green")}>
+                  {criticalAlerts}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-muted">⚠️ Warnings</span>
+                <span className={clsx("text-[13px] font-bold font-mono", ((expiringKeysCount ?? 0) + costWasteCount) > 0 ? "text-amber" : "text-green")}>
+                  {(expiringKeysCount ?? 0) + costWasteCount}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-muted">💸 Potential waste</span>
+                <span className="text-[13px] font-bold font-mono text-amber">
+                  {analysis?.potentialMonthlySavingsUsd != null && analysis.potentialMonthlySavingsUsd > 0
+                    ? `$${analysis.potentialMonthlySavingsUsd.toFixed(0)}/mo`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-muted">⏳ APIs nearing limit</span>
+                <span className={clsx("text-[13px] font-bold font-mono", usageNearingLimitCount > 0 ? "text-amber" : "text-green")}>
+                  {usageNearingLimitCount}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── NO LLM KEY BANNER ── */}
         {!loading && !scanning && result?.error === "NO_LLM_KEY" && (
@@ -315,7 +378,7 @@ export default function DashboardPage() {
           <div className="bg-red/5 border border-red/20 rounded-2xl px-5 py-4 flex items-start gap-3">
             <span className="text-xl mt-0.5">⚠️</span>
             <div className="flex-1">
-              <div className="text-[13px] font-semibold text-red mb-1">AI analysis failed</div>
+              <div className="text-[13px] font-semibold text-red mb-1">⚠️ Analysis paused — check your AI connection</div>
               <div className="text-[12px] text-muted">
                 {result.error.includes("API key not valid") || result.error.includes("API_KEY_INVALID")
                   ? "Your LLM API key is invalid. Please update it in Integrations → AI Analysis Engine."
