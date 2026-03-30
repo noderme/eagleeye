@@ -122,6 +122,14 @@ export default function LandingPage() {
   const [emailSubmitted, setEmailSubmitted] = useState(false);
   const [isMock, setIsMock] = useState(IS_MOCK_MODE);
 
+  // Redirect already-authenticated users straight to dashboard
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.push("/dashboard");
+    });
+  }, []);
+
   // Double-check mock mode at runtime by hitting the API
   useEffect(() => {
     fetch("/api/scan/results")

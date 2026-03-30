@@ -7,6 +7,7 @@ import { fetchAllRepoInsights, type RepoSummary } from "@/lib/github";
 import { runAnalysis, type LLMKey } from "@/lib/analyze";
 import { MOCK_MODE_ENABLED } from "@/lib/config";
 import { getMockScanResult } from "@/lib/mock-scan";
+import { sendScanCompleteEmail } from "@/lib/email";
 
 export const maxDuration = 300; // 5 min — needed for Claude + GitHub in production
 
@@ -147,6 +148,14 @@ export async function POST() {
         console.error("[Eagle Eye] Analysis error:", err);
       }
     }
+
+    // Email notifications disabled — enable when ready
+    // if (analysis && user.email) {
+    //   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://eagleeye.app";
+    //   sendScanCompleteEmail(user.email, analysis, appUrl).catch(err =>
+    //     console.error("[Eagle Eye] Email send failed:", err)
+    //   );
+    // }
 
     // Return without saving — caller decides whether to persist
     return NextResponse.json({
