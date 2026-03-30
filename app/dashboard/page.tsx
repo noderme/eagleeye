@@ -318,46 +318,6 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* ── DAILY RISK SUMMARY ── */}
-        {!loading && !scanning && result && (
-          <div className="bg-surface border border-border rounded-2xl px-5 py-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[1.2px] text-muted">Today's Risk Summary</span>
-              <span className="text-[10px] text-muted/50 font-mono">
-                {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-              </span>
-            </div>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] text-muted">🔴 Critical issues</span>
-                <span className={clsx("text-[13px] font-bold font-mono", criticalAlerts > 0 ? "text-red" : "text-green")}>
-                  {criticalAlerts}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] text-muted">⚠️ Warnings</span>
-                <span className={clsx("text-[13px] font-bold font-mono", ((expiringKeysCount ?? 0) + costWasteCount) > 0 ? "text-amber" : "text-green")}>
-                  {(expiringKeysCount ?? 0) + costWasteCount}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] text-muted">💸 Potential waste</span>
-                <span className="text-[13px] font-bold font-mono text-amber">
-                  {analysis?.potentialMonthlySavingsUsd != null && analysis.potentialMonthlySavingsUsd > 0
-                    ? `$${analysis.potentialMonthlySavingsUsd.toFixed(0)}/mo`
-                    : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] text-muted">⏳ APIs nearing limit</span>
-                <span className={clsx("text-[13px] font-bold font-mono", usageNearingLimitCount > 0 ? "text-amber" : "text-green")}>
-                  {usageNearingLimitCount}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── NO LLM KEY BANNER ── */}
         {!loading && !scanning && result?.error === "NO_LLM_KEY" && (
           <div className="bg-amber/5 border border-amber/20 rounded-2xl px-5 py-4 flex items-start gap-3">
@@ -385,7 +345,7 @@ export default function DashboardPage() {
                   : result.error.includes("GoogleGenerativeAI Error")
                     ? "Gemini API error — check your API key is valid and has quota remaining."
                     : result.error.includes("malformed output") || result.error.includes("SyntaxError") || result.error.includes("JSON")
-                      ? "Scan completed but the AI returned unreadable output. Try running another scan."
+                      ? "Scan completed but the AI returned unreadable output. For more reliable analysis, switch to Claude (Anthropic)."
                       : "Something went wrong during analysis. Try running another scan."
                 }{" "}
                 <a href="/dashboard/integrations" className="text-cyan underline underline-offset-2 hover:text-cyan/80">

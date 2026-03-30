@@ -858,10 +858,10 @@ export default function IntegrationsPage() {
 // ── LLM Key Section Component ──────────────────────────────────────────────
 
 const LLM_PROVIDERS = [
-  { id: "llm_openai", name: "OpenAI", emoji: "🤖", placeholder: "sk-...", hint: "Uses gpt-4o-mini. Get your key at platform.openai.com → API Keys." },
-  { id: "llm_anthropic", name: "Anthropic", emoji: "🧠", placeholder: "sk-ant-...", hint: "Uses claude-3-5-sonnet. Get your key at console.anthropic.com → API Keys." },
-  { id: "llm_gemini", name: "Gemini", emoji: "✨", placeholder: "AIza...", hint: "Uses gemini-2.0-flash (free tier available). Get your key at aistudio.google.com → Get API Key." },
-  { id: "llm_ollama", name: "Ollama (Local / Free)", emoji: "🦙", placeholder: "http://localhost:11434", hint: "Free, runs on your machine. Install from ollama.ai, then run: ollama pull llama3.1:8b. Enter your Ollama base URL (default: http://localhost:11434). Best for local testing." },
+  { id: "llm_openai",   name: "OpenAI",             emoji: "🤖", recommended: false, placeholder: "sk-...",                hint: "Uses gpt-4o-mini. Get your key at platform.openai.com → API Keys." },
+  { id: "llm_anthropic", name: "Anthropic (Claude)", emoji: "🧠", recommended: true,  placeholder: "sk-ant-...",            hint: "Uses claude-3-5-sonnet. Best structured output and analysis quality. Get your key at console.anthropic.com → API Keys." },
+  { id: "llm_gemini",   name: "Gemini",              emoji: "✨", recommended: false, placeholder: "AIza...",               hint: "Uses gemini-2.0-flash (free tier available). Get your key at aistudio.google.com → Get API Key." },
+  { id: "llm_ollama",   name: "Ollama (Local / Free)", emoji: "🦙", recommended: false, placeholder: "http://localhost:11434", hint: "Free, runs on your machine. Install from ollama.ai, then run: ollama pull llama3.1:8b. Enter your Ollama base URL (default: http://localhost:11434). Best for local testing." },
 ];
 
 function LLMKeySection({ connected, setConnected }: { connected: Set<string>; setConnected: (s: Set<string>) => void }) {
@@ -935,6 +935,9 @@ function LLMKeySection({ connected, setConnected }: { connected: Set<string>; se
             <div className="flex items-center gap-2">
               <span>{p.emoji}</span>
               <span className="text-[12px] text-text">{p.name}</span>
+              {p.recommended && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-cyan/10 border border-cyan/20 text-cyan uppercase tracking-wide">Recommended</span>
+              )}
             </div>
             {expanded === p.id ? <ChevronUp className="w-3.5 h-3.5 text-muted" /> : <ChevronDown className="w-3.5 h-3.5 text-muted" />}
           </button>
