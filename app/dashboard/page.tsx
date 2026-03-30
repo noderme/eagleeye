@@ -384,9 +384,9 @@ export default function DashboardPage() {
                   ? "Your LLM API key is invalid. Please update it in Integrations → AI Analysis Engine."
                   : result.error.includes("GoogleGenerativeAI Error")
                     ? "Gemini API error — check your API key is valid and has quota remaining."
-                    : result.error.length > 200
-                      ? result.error.slice(0, 200) + "..."
-                      : result.error
+                    : result.error.includes("malformed output") || result.error.includes("SyntaxError") || result.error.includes("JSON")
+                      ? "Scan completed but the AI returned unreadable output. Try running another scan."
+                      : "Something went wrong during analysis. Try running another scan."
                 }{" "}
                 <a href="/dashboard/integrations" className="text-cyan underline underline-offset-2 hover:text-cyan/80">
                   Update in Integrations →

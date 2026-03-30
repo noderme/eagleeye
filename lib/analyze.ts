@@ -307,14 +307,27 @@ Sort: critical first, then warning, saving, info. Max 15 total.`;
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("Could not parse Claude response as JSON");
 
-  // Sanitize common local-LLM JSON mistakes before parsing:
-  // 1. Unquoted ISO dates: "deadline": ISO 2024-01-15 → "deadline": "ISO 2024-01-15"
-  // 2. Trailing commas before } or ]
+  // Sanitize common local-LLM JSON mistakes before parsing
   const sanitized = jsonMatch[0]
+    // 1. Strip JS-style single-line comments
+    .replace(/\/\/[^\n]*/g, "")
+    // 2. Strip block comments
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    // 3. Unquoted ISO dates: "deadline": ISO 2024-01-15
     .replace(/:\s*(ISO\s[\d\-T:.Z]+)/g, ': "$1"')
+    // 4. Single-quoted string values → double-quoted
+    .replace(/:\s*'([^']*)'/g, ': "$1"')
+    // 5. Unquoted property keys: { key: → { "key":
+    .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*):/g, '$1"$2"$3:')
+    // 6. Trailing commas before } or ]
     .replace(/,(\s*[}\]])/g, "$1");
 
-  const parsed = JSON.parse(sanitized) as AnalysisResult;
+  let parsed: AnalysisResult;
+  try {
+    parsed = JSON.parse(sanitized) as AnalysisResult;
+  } catch {
+    throw new Error("AI returned malformed output — scan completed but analysis could not be read. Try running another scan.");
+  }
 
   // Deduplicate: if a provider already has a warning/critical rec, drop plan-fit info for it
   const SEVERITY_RANK: Record<string, number> = { critical: 3, warning: 2, saving: 1, info: 0 };
