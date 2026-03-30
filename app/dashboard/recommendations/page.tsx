@@ -50,11 +50,20 @@ export default function RecommendationsPage() {
   };
 
   const severityCfg = {
-    critical: { badge: "bg-red/10 text-red border-red/20",     label: "Critical" },
-    warning:  { badge: "bg-amber/10 text-amber border-amber/20", label: "Warning"  },
-    saving:   { badge: "bg-green/10 text-green border-green/20", label: "Saving"   },
-    info:     { badge: "bg-cyan/10 text-cyan border-cyan/20",   label: "Info"     },
+    critical: { badge: "bg-red/10 text-red border-red/20",     label: "Critical", fallbackIcon: "🔴" },
+    warning:  { badge: "bg-amber/10 text-amber border-amber/20", label: "Warning",  fallbackIcon: "⚠️" },
+    saving:   { badge: "bg-green/10 text-green border-green/20", label: "Saving",   fallbackIcon: "💸" },
+    info:     { badge: "bg-cyan/10 text-cyan border-cyan/20",   label: "Info",     fallbackIcon: "ℹ️" },
   };
+
+  // Local LLMs often return shortcodes (:bangbang:) instead of real emoji — fall back to severity icon
+  function resolveIcon(icon: string, severity: string): string {
+    if (!icon || icon.startsWith(":")) {
+      const cfg = severityCfg[severity as keyof typeof severityCfg];
+      return cfg?.fallbackIcon ?? "•";
+    }
+    return icon;
+  }
 
   return (
     <>
@@ -150,7 +159,7 @@ export default function RecommendationsPage() {
             const cfg = severityCfg[rec.severity as keyof typeof severityCfg] ?? severityCfg.info;
             return (
               <div key={rec.id} className="bg-surface border border-border rounded-2xl p-5 flex gap-4 hover:bg-dim transition-colors">
-                <span className="text-2xl flex-shrink-0 mt-0.5">{rec.icon}</span>
+                <span className="text-2xl flex-shrink-0 mt-0.5">{resolveIcon(rec.icon, rec.severity)}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
                     <span className="text-[13px] font-semibold text-text">{rec.title}</span>
