@@ -22,6 +22,7 @@ import { MOCK_MODE_ENABLED } from "@/lib/config";
 import { getMockProvider } from "@/lib/mock-providers";
 import { friendlyError } from "@/lib/errors";
 import type { LLMKey } from "@/lib/analyze";
+import { tryExtractExpiryFromCredentials } from "@/lib/key-expiry-extractor";
 
 export type { Credentials };
 
@@ -127,12 +128,23 @@ async function runDynamicProviderWithCache(
     );
   }
 
+  // If the discovery engine didn't find expiry from the API, try extracting it from the
+  // credential value itself (e.g. JWT tokens embed exp claim directly)
+  let keyExpiresAt = endpointMap.keyExpiresAt;
+  if (keyExpiresAt === undefined) {
+    const fromKey = tryExtractExpiryFromCredentials(creds);
+    if (fromKey) {
+      keyExpiresAt = fromKey;
+      console.log(`[Expiry] ${serviceId}: extracted expiry from key value: ${fromKey}`);
+    }
+  }
+
   // Attach structured summary for dashboard rendering
   // Also surface expiry detection results so the scan save route can write them back to user_api_keys
   return {
     ...liveData,
     _providerSummary: summary,
-    _keyExpiresAt: endpointMap.keyExpiresAt,       // ISO string if found, null if confirmed absent
+    _keyExpiresAt: keyExpiresAt,                        // ISO string if found, null if confirmed absent
     _expiryChecked: endpointMap.expiryChecked ?? false, // true if LLM explicitly checked
   };
 }
